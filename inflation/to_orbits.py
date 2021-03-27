@@ -20,17 +20,9 @@ else:
     cached_property = property
     
 from wrapper import *
-from internal_functions.groups import dimino_sympy,dimino_wolfe, minimize_object_under_group_action, orbits_of_object_under_group_action
+from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action
 from internal_functions.utilities import MoveToFront, MoveToBack
 
-
-hypergraph=np.array([[1,1,0],[0,1,1]])
-directed_structure=np.array([[0,1,1],[0,0,0],[0,0,0]])
-outcome_cardinalities = (2, 2, 2)
-private_setting_cardinalities = (2, 1, 1)
-
-cardinalities=[2,2,2]
-inflation_orders=[2,2]
 
 class inflated_hypergraph:
     
@@ -85,7 +77,7 @@ class inflated_hypergraph:
     def inflation_group_elements(self):
         return np.array(dimino_sympy([gen for gen in np.vstack(self.inflation_group_generators)]))
     
-class infmat_columns(inflated_hypergraph):
+class unpacked_inflated_columns(inflated_hypergraph):
     
     def __init__(self,hypergraph,inflation_orders,cardinalities,directed_structure):
         inflated_hypergraph.__init__(self,hypergraph,inflation_orders)
@@ -100,7 +92,15 @@ class infmat_columns(inflated_hypergraph):
     def column_orbits(self):
         return orbits_of_object_under_group_action(self.shaped_column_integers,self.inflation_group_elements).T
         
+if __name__ == '__main__':
     
-print(infmat_columns(hypergraph,inflation_orders,cardinalities,directed_structure).column_orbits)    
+    hypergraph=np.array([[1,1,0],[0,1,1]])
+    directed_structure=np.array([[0,1,1],[0,0,0],[0,0,0]])
+    outcome_cardinalities = (2, 2, 2)
+    private_setting_cardinalities = (2, 1, 1)
+    
+    cardinalities=[2,2,2]
+    inflation_orders=[2,2]
+    print(unpacked_inflated_columns(hypergraph,inflation_orders,cardinalities,directed_structure).column_orbits)    
     
     
