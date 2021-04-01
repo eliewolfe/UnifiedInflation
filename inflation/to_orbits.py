@@ -77,7 +77,7 @@ class inflated_hypergraph:
     def inflation_group_elements(self):
         return np.array(dimino_sympy([gen for gen in np.vstack(self.inflation_group_generators)]))
     
-class packed_inflated_columns(inflated_hypergraph):
+class packed_inflated_columns(inflated_hypergraph,DAG):
     
     def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
         inflated_hypergraph.__init__(self,hypergraph,inflation_orders)
