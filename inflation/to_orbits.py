@@ -77,16 +77,19 @@ class inflated_hypergraph:
     def inflation_group_elements(self):
         return np.array(dimino_sympy([gen for gen in np.vstack(self.inflation_group_generators)]))
     
-class unpacked_inflated_columns(inflated_hypergraph):
+class packed_inflated_columns(inflated_hypergraph):
     
-    def __init__(self,hypergraph,inflation_orders,cardinalities,directed_structure):
+    def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
         inflated_hypergraph.__init__(self,hypergraph,inflation_orders)
-        self.unpacked_cardinalities=[cardinalities[observable]**np.prod(np.array(cardinalities)[np.nonzero(directed_structure[:,observable])[0]]) for observable in range(self.observed_count)]
-        self.inflated_unpacked_cardinalities_array=np.repeat(self.unpacked_cardinalities, self.inflation_copies)
-        self.inflated_unpacked_cardinalities_tuple=tuple(self.inflated_unpacked_cardinalities_array)
+        DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
+        self.packed_cardinalities=[outcome_cardinalities[observable]**self.setting_cardinalities[observable] for observable in range(self.observed_count)]
+        self.inflated_packed_cardinalities_array=np.repeat(self.packed_cardinalities, self.inflation_copies)
+        self.inflated_packed_cardinalities_tuple=tuple(self.inflated_packed_cardinalities_array)
         
-        self.column_count=self.inflated_unpacked_cardinalities_array.prod()
-        self.shaped_column_integers = np.arange(self.column_count).reshape(self.inflated_unpacked_cardinalities_tuple)
+        self.column_count=self.inflated_packed_cardinalities_array.prod()
+        self.shaped_column_integers = np.arange(self.column_count).reshape(self.inflated_packed_cardinalities_tuple)
+        print(self.inflated_packed_cardinalities_tuple)
+        print(self.inflated_packed_cardinalities_array.prod())
     
     @cached_property
     def column_orbits(self):
@@ -99,8 +102,7 @@ if __name__ == '__main__':
     outcome_cardinalities = (2, 2, 2)
     private_setting_cardinalities = (2, 1, 1)
     
-    cardinalities=[2,2,2]
     inflation_orders=[2,2]
-    print(unpacked_inflated_columns(hypergraph,inflation_orders,cardinalities,directed_structure).column_orbits)    
+    print(packed_inflated_columns(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities).column_orbits)
     
     
