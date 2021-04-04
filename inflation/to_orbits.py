@@ -34,6 +34,7 @@ class inflated_hypergraph:
         self._latent_ancestors_of=[self.inflations_orders.take(np.nonzero(hypergraph[:,observable])[0]) for observable in range(self.observed_count)]
         self.inflation_copies = np.fromiter(map(np.prod, self._latent_ancestors_of), np.int)
         self.inflation_depths = np.fromiter(map(len, self._latent_ancestors_of), np.int)
+        self.inflation_minima = np.fromiter(map(np.amin, self._latent_ancestors_of), np.int)
         accumulated = np.add.accumulate(self.inflation_copies)
         self.inflated_observed_count = accumulated[-1]
         self.offsets = np.hstack(([0], accumulated[:-1]))
@@ -85,16 +86,55 @@ class packed_inflated_columns(inflated_hypergraph,DAG):
         self.packed_cardinalities=[outcome_cardinalities[observable]**self.setting_cardinalities[observable] for observable in range(self.observed_count)]
         self.inflated_packed_cardinalities_array=np.repeat(self.packed_cardinalities, self.inflation_copies)
         self.inflated_packed_cardinalities_tuple=tuple(self.inflated_packed_cardinalities_array)
-        
-        self.column_count=self.inflated_packed_cardinalities_array.prod()
-        self.shaped_column_integers = np.arange(self.column_count).reshape(self.inflated_packed_cardinalities_tuple)
         print(self.inflated_packed_cardinalities_tuple)
-        print(self.inflated_packed_cardinalities_array.prod())
+        print(np.repeat(np.arange(len(outcome_cardinalities)),self.inflation_copies))
+        self.column_count=self.inflated_packed_cardinalities_array.prod()
+        self.shaped_packed_column_integers = np.arange(self.column_count).reshape(self.inflated_packed_cardinalities_tuple)
     
     @cached_property
     def column_orbits(self):
-        return orbits_of_object_under_group_action(self.shaped_column_integers,self.inflation_group_elements).T
+        return orbits_of_object_under_group_action(self.shaped_packed_column_integers,self.inflation_group_elements).T
+
+class expressible_sets(packed_inflated_columns):
+    
+    def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
+        packed_inflated_columns.__init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
+        self.unpacked_inflated_copies=[self.setting_cardinalities[observable]*self.inflation_copies[observable] for observable in range(self.observed_count)]
+        self.inflated_unpacked_cardinalities=list(itertools.chain.from_iterable([list(np.repeat(outcome_cardinalities[observable],self.unpacked_inflated_copies[observable])) for observable in range(self.observed_count)]))
+        self.inflated_unpacked_cardinalities_tuple=tuple(self.inflated_unpacked_cardinalities)
+        self.shaped_unpacked_column_integers = np.arange(self.column_count).reshape(self.inflated_unpacked_cardinalities_tuple)
+        accumulated_unpacked=np.add.accumulate(self.unpacked_inflated_copies)
+        self.unpacked_inflated_offsets=np.hstack(([0], accumulated_unpacked[:-1]))
         
+        self._canonical_pos = [
+            np.outer(inflation_minimum ** np.arange(inflation_depth), np.arange(inflation_minimum)).sum(axis=0) + offset
+            for inflation_minimum, inflation_depth, offset
+            in zip(self.inflation_minima, self.inflation_depths, self.unpacked_inflated_offsets)]
+    @property
+    def partitioned_expressible_set(self):
+        return [np.compress(np.add(part, 1).astype(np.bool), part)
+                for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
+
+    @cached_property
+    def diagonal_expressible_set(self):
+        temp = np.hstack(self.partitioned_expressible_set)
+        temp.sort()
+        return temp
+        
+    def Columns_to_unique_rows(self, shaped_column_integers):
+                data_shape = shaped_column_integers.shape
+                # Can be used for off-diagonal expressible sets with no adjustment!
+                expr_set_size = np.take(data_shape, self.flat_eset).prod()
+    
+                reshaped_column_integers = shaped_column_integers.transpose(
+                    MoveToBack(len(data_shape), self.flat_eset)).reshape(
+                    (-1, expr_set_size))
+                encoding_of_columns_to_monomials = np.empty(shaped_column_integers.size, np.int)
+                encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
+                return encoding_of_columns_to_monomials
+
+
+
 if __name__ == '__main__':
     
     hypergraph=np.array([[1,1,0],[0,1,1]])
@@ -103,6 +143,6 @@ if __name__ == '__main__':
     private_setting_cardinalities = (2, 1, 1)
     
     inflation_orders=[2,2]
-    print(packed_inflated_columns(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities).column_orbits)
+    print(expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities))
     
     
