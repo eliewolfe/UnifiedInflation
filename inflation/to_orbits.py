@@ -105,21 +105,17 @@ class expressible_sets(packed_inflated_columns):
         self.shaped_unpacked_column_integers = np.arange(self.column_count).reshape(self.inflated_unpacked_cardinalities_tuple)
         accumulated_unpacked=np.add.accumulate(self.unpacked_inflated_copies)
         self.unpacked_inflated_offsets=np.hstack(([0], accumulated_unpacked[:-1]))
+        self.unpacking_offsets=np.hstack(([0],np.array(self.setting_cardinalities)[:-1]))
         
         self._canonical_pos = [
             np.outer(inflation_minimum ** np.arange(inflation_depth), np.arange(inflation_minimum)).sum(axis=0) + offset
             for inflation_minimum, inflation_depth, offset
             in zip(self.inflation_minima, self.inflation_depths, self.unpacked_inflated_offsets)]
-    @property
-    def partitioned_expressible_set(self):
-        return [np.compress(np.add(part, 1).astype(np.bool), part)
+        self.first_partitioned_eset=[np.compress(np.add(part, 1).astype(np.bool), part)
                 for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
 
-    @cached_property
-    def diagonal_expressible_set(self):
-        temp = np.hstack(self.partitioned_expressible_set)
-        temp.sort()
-        return temp
+        self.first_diagonal_eset = np.hstack(self.first_partitioned_eset).sort()
+
         
     def Columns_to_unique_rows(self, shaped_column_integers):
                 data_shape = shaped_column_integers.shape
