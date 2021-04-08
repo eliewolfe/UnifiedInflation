@@ -26,7 +26,7 @@ class DAG(Network):
     def __init__(self, hypergraph_structure, directed_structure, outcome_cardinalities, private_setting_cardinalities):
         self.inverse_directed_structure = np.transpose(directed_structure)
         self.extra_setting_cardinalities = np.multiply(outcome_cardinalities, self.inverse_directed_structure)
-        self.shaped_setting_cardinalities = [np.hstack((set, cards[cards.nonzero()])) for set, cards in
+        self.shaped_setting_cardinalities = [np.hstack((sett, cards[cards.nonzero()])) for sett, cards in
                                         zip(private_setting_cardinalities, self.extra_setting_cardinalities)]
         Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
 
