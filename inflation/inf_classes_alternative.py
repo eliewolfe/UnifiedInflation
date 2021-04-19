@@ -175,61 +175,70 @@ class inflation_problem(inflated_hypergraph,DAG):
     def valid_outcomes(self,eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
 
-    
+    def eset_unpacking_rows_to_keep(self,partitioned_tuple_form):
+        validoutcomes=[self.valid_outcomes(part) for part in partitioned_tuple_form]
+        
+        v=validoutcomes[-1]
+        for i in range(len(validoutcomes)-1):
+            v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
+        
+        eset_kept_rows=np.flatnonzero(v.astype(np.int))
+        
+        return eset_kept_rows
+        
+    def eset_discarded_rows_to_trash(self,eset):
+        which_rows_to_keep=np.intersect1d(eset.unpacking_rows_to_keep,eset.symmetry_rows_to_keep)
+        size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
+        #there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
+        discarded_rows_to_the_back = np.full(eset.size_of_eset, 0, dtype=np.int)#make it 0 instead of -1
+        np.put(discarded_rows_to_the_back, which_rows_to_keep, np.arange(size_of_eset_after_symmetry_and_unpacking)+1)#add the offset here
+        discarded_rows_to_the_back=discarded_rows_to_the_back
+        return discarded_rows_to_the_back
+
+    def columns_to_unique_rows(self, flat_eset):
+        data_shape = self.shaped_unpacked_column_integers.shape
+        # Can be used for off-diagonal expressible sets with no adjustment!
+        flat_eset=np.array(flat_eset)
+        expr_set_size = np.take(data_shape, flat_eset).prod()
+        reshaped_column_integers = self.shaped_unpacked_column_integers.transpose(MoveToBack(len(data_shape), flat_eset)).reshape((-1, expr_set_size))            
+        encoding_of_columns_to_monomials = np.empty(self.shaped_unpacked_column_integers.size, np.int)
+        encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
+        return encoding_of_columns_to_monomials
+
     class expressible_set:
-        def __init__(self,partitioned_eset,inf_prob):
+        def __init__(self,partitioned_eset):
             self.partitioned_tuple_form=partitioned_eset
             self.flat_form=[elem for part in self.partitioned_tuple_form for elem in part]
-            #self.shape_of_eset = inf_prob.eset_shape(self.flat_form)
-            self.shape_of_eset=np.take(np.array(inf_prob.inflated_unpacked_cardinalities), self.flat_form)
-            self.size_of_eset = self.shape_of_eset.prod()
-            self.eset_symmetry_rows_to_keep=inf_prob.eset_symmetry_rows_to_keep
-            self.valid_outcomes=inf_prob.valid_outcomes
-            self.shaped_column_integers=inf_prob.shaped_unpacked_column_integers
-            
-        @cached_property
-        def eset_unpacking_rows_to_keep(self):
-            validoutcomes=[self.valid_outcomes(part) for part in self.partitioned_tuple_form]
-            
-            v=validoutcomes[-1]
-            for i in range(len(validoutcomes)-1):
-                v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
-            
-            eset_kept_rows=np.flatnonzero(v.astype(np.int))
-            
-            return eset_kept_rows
-                
-        def eset_discarded_rows_to_trash(self,offset):
-            which_rows_to_keep=np.intersect1d(self.eset_unpacking_rows_to_keep,self.eset_symmetry_rows_to_keep)
-            size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
-            #there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
-            discarded_rows_to_the_back = np.full(self.size_of_eset, 0, dtype=np.int)#make it 0 instead of -1
-            np.put(discarded_rows_to_the_back, which_rows_to_keep, np.arange(size_of_eset_after_symmetry_and_unpacking)+offset)#add the offset here
-            discarded_rows_to_the_back=discarded_rows_to_the_back
-            return discarded_rows_to_the_back
-    
-        @cached_property
-        def columns_to_unique_rows(self):
-            data_shape = self.shaped_column_integers.shape
-            flat_eset=np.array(self.flat_form)
-            expr_set_size = np.take(data_shape, flat_eset).prod()
-            reshaped_column_integers = self.shaped_column_integers.transpose(MoveToBack(len(data_shape), flat_eset)).reshape((-1, expr_set_size))            
-            encoding_of_columns_to_monomials = np.empty(self.shaped_column_integers.size, np.int)
-            encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
-            return encoding_of_columns_to_monomials
     
     @cached_property
     def expressible_sets(self):
-        return [self.expressible_set(elem,self) for elem in self.partitioned_unpacked_esets]
+        esets=[]
+        for elem in self.partitioned_unpacked_esets:
+            eset=self.expressible_set(elem)
+            #print([self.ravelled_conf_setting_indecies[np.array(part)] for part in eset.partitioned_tuple_form])
+            eset.original_indecies=tuple([tuple(self.ravelled_conf_var_indecies[np.array(part)]) for part in eset.partitioned_tuple_form])
+            eset.settings_of=tuple([tuple(np.array(self.ravelled_conf_setting_indecies)[np.array(part)]) for part in eset.partitioned_tuple_form])
+            eset.shape_of_eset=np.take(np.array(self.inflated_unpacked_cardinalities), eset.flat_form)
+            eset.size_of_eset = eset.shape_of_eset.prod()
+            eset.symmetry_rows_to_keep=self.eset_symmetry_rows_to_keep
+            eset.unpacking_rows_to_keep=self.eset_unpacking_rows_to_keep(eset.partitioned_tuple_form)
+            eset.discarded_rows_to_trash_no_offsets=self.eset_discarded_rows_to_trash(eset)
+            eset.columns_to_rows=self.columns_to_unique_rows(eset.flat_form)
+            
+            esets.append(eset)
+        
+        return esets
     
     @cached_property
     def AMatrix(self):
-        offset=1
+        offset=0
         amatrices=[]
-        for partitioned_eset in self.expressible_sets:
-            disgarded=partitioned_eset.eset_discarded_rows_to_trash(offset)
-            amatrix=disgarded.take(partitioned_eset.columns_to_unique_rows).take(self.column_orbits)
-            offset=np.amax(disgarded)+1
+        for eset in self.expressible_sets:
+            offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
+            offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
+            eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+offset_array
+            amatrix=eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
+            offset=np.amax(eset.discarded_rows_to_trash)
             amatrices.append(amatrix)
         
         AMatrix=np.vstack(tuple(amatrices))#add a flag to SparseMatrixFrom RowsToColumns
