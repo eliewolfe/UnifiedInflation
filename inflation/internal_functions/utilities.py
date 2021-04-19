@@ -61,6 +61,11 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
     #Assumes that OnesPositions is a 2d numpy array of integers.
     #First dimension indicates which ORBIT we are considering.
     #Second dimension indicates which COLUMN we are listing rows for.
+    there_are_discarded_rows=np.any(OnesPositions==0)
+    
+    if not there_are_discarded_rows:
+        OnesPositions=OnesPositions-1
+    
     columncount = OnesPositions.shape[-1]
     rowcount = int(np.amax(OnesPositions)) + 1
     if sort_columns:

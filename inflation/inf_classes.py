@@ -38,6 +38,14 @@ class inflated_hypergraph:
         accumulated = np.add.accumulate(self.inflation_copies)
         self.inflated_observed_count = accumulated[-1]
         self.offsets = np.hstack(([0], accumulated[:-1]))
+        #packed expressible set
+        self._canonical_pos = [
+            np.outer(inflation_minimum ** np.arange(inflation_depth), np.arange(inflation_minimum)).sum(axis=0) + offset
+            for inflation_minimum, inflation_depth, offset
+            in zip(self.inflation_minima, self.inflation_depths, self.offsets)]
+        self.packed_partitioned_eset=[np.compress(np.add(part, 1).astype(np.bool), part)
+                for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
+        self.packed_partitioned_eset_tuple=tuple([tuple(i) for i in self.packed_partitioned_eset])
         
     @cached_property
     def inflation_group_generators(self):
@@ -78,7 +86,35 @@ class inflated_hypergraph:
     def inflation_group_elements(self):
         return np.array(dimino_sympy([gen for gen in np.vstack(self.inflation_group_generators)]))
     
-class packed_inflated_columns(inflated_hypergraph,DAG):
+    @cached_property
+    def eset_symmetry_group(self):
+     
+        when_sorted = np.argsort(np.hstack(self.packed_partitioned_eset_tuple))
+        it = iter(when_sorted)
+        _canonical_pos2 = [list(itertools.islice(it, size)) for size in self.inflation_minima]
+    
+        unfiltered_variants = np.array([np.hstack(np.vstack(perm).T) for perm in
+                                        itertools.permutations(itertools.zip_longest(*_canonical_pos2, fillvalue=-1))])
+        expressible_set_variants_filter = np.add(unfiltered_variants, 1).astype(np.bool)
+        unfiltered_variants = unfiltered_variants.compress(
+            (expressible_set_variants_filter == np.atleast_2d(expressible_set_variants_filter[0])).all(axis=1),
+            axis=0)
+        filtered_variants = np.array([eset.compress(np.add(eset, 1).astype(np.bool)) for eset in unfiltered_variants])
+        return np.take_along_axis(np.argsort(filtered_variants,axis=1), np.atleast_2d(when_sorted),   axis=1)
+    
+    @cached_property
+    def eset_symmetry_rows_to_keep(self):
+        shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities), [elem for part in self.packed_partitioned_eset_tuple for elem in part])
+        size_of_eset = shape_of_eset.prod()
+        which_rows_to_keep = np.arange(size_of_eset).reshape(shape_of_eset)
+        minimize_object_under_group_action(
+            which_rows_to_keep,
+            self.eset_symmetry_group, skip=1)
+        which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
+        return which_rows_to_keep
+    
+    
+class inflation_problem(inflated_hypergraph,DAG):
     
     def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
         inflated_hypergraph.__init__(self,hypergraph,inflation_orders)
@@ -90,16 +126,8 @@ class packed_inflated_columns(inflated_hypergraph,DAG):
         self.column_count=self.inflated_packed_cardinalities_array.prod()
         self.shaped_packed_column_integers = np.arange(self.column_count).reshape(self.inflated_packed_cardinalities_tuple)
     
-    @cached_property
-    def column_orbits(self):
-        AMatrix=orbits_of_object_under_group_action(self.shaped_packed_column_integers,self.inflation_group_elements).T
-        AMatrix = np.compress(AMatrix[0]>=0, AMatrix, axis=1)
-        return AMatrix
-
-class expressible_sets(packed_inflated_columns):
-    
-    def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
-        packed_inflated_columns.__init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
+        #Expressible set related properties
+        
         self.unpacked_conf_integers=np.array([list(np.arange(self.setting_cardinalities[packed_obs])+np.array(self.setting_cardinalities)[self.inflated_packed_cardinalities_indecies[:packed_obs_index]].sum()) for packed_obs_index,packed_obs in  enumerate(self.inflated_packed_cardinalities_indecies)],dtype=object)
         #print(self.unpacked_conf_integers)
         self.conf_setting_integers=np.array([range(self.setting_cardinalities[obs]) for obs in range(self.observed_count)],dtype=object)
@@ -116,12 +144,6 @@ class expressible_sets(packed_inflated_columns):
         self.inflated_unpacked_cardinalities_tuple=tuple(self.inflated_unpacked_cardinalities)
         self.shaped_unpacked_column_integers = np.arange(self.column_count).reshape(self.inflated_unpacked_cardinalities_tuple)
         
-        self._canonical_pos = [
-            np.outer(inflation_minimum ** np.arange(inflation_depth), np.arange(inflation_minimum)).sum(axis=0) + offset
-            for inflation_minimum, inflation_depth, offset
-            in zip(self.inflation_minima, self.inflation_depths, self.offsets)]
-        self.packed_partitioned_eset=[np.compress(np.add(part, 1).astype(np.bool), part)
-                for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
         #print(self.packed_partitioned_eset)
         self.partitioned_unpacked_eset_candidates=[list(itertools.product(*list(self.unpacked_conf_integers[part]))) for part in self.packed_partitioned_eset]
         #print(self.partitioned_unpacked_eset_candidates)
@@ -129,7 +151,13 @@ class expressible_sets(packed_inflated_columns):
         #print(self.partitioned_unpacked_esets)
         self.flat_unpacked_esets=[[elem for part in eset for elem in part] for eset in self.partitioned_unpacked_esets]
         #print(self.flat_unpacked_esets)
-        
+    
+    @cached_property
+    def column_orbits(self):
+        AMatrix=orbits_of_object_under_group_action(self.shaped_packed_column_integers,self.inflation_group_elements).T
+        AMatrix = np.compress(AMatrix[0]>=0, AMatrix, axis=1)
+        return AMatrix
+    
     def _valid_outcomes(self,eset_part_candidate):
         observables=np.array(self.ravelled_conf_var_indecies)[np.array(eset_part_candidate)]
         settings_assignment=tuple(np.array(self.ravelled_conf_setting_indecies)[np.array(eset_part_candidate)])
@@ -146,92 +174,72 @@ class expressible_sets(packed_inflated_columns):
             yield validity
     def valid_outcomes(self,eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
-        
-    def eset_unpacking_rows_to_keep(self,partitioned_eset):
-        validoutcomes=[self.valid_outcomes(part) for part in partitioned_eset]
-        
-        v=validoutcomes[-1]
-        for i in range(len(validoutcomes)-1):
-            v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
-        
-        #eset_kept_rows=((np.arange(len(v))+1)*v.astype(np.int))-1#nonzero
-        #eset_kept_rows=eset_kept_rows[np.where(eset_kept_rows!=-1)[0]]
-        
-        eset_kept_rows=np.flatnonzero(v.astype(np.int))
-        
-        return eset_kept_rows
-        
-        
-    def eset_symmetry_group(self,partitioned_eset):
-         
-        when_sorted = np.argsort(np.hstack(partitioned_eset))
-        it = iter(when_sorted)
-        _canonical_pos2 = [list(itertools.islice(it, size)) for size in self.inflation_minima]
 
-        unfiltered_variants = np.array([np.hstack(np.vstack(perm).T) for perm in
-                                        itertools.permutations(itertools.zip_longest(*_canonical_pos2, fillvalue=-1))])
-        expressible_set_variants_filter = np.add(unfiltered_variants, 1).astype(np.bool)
-        unfiltered_variants = unfiltered_variants.compress(
-            (expressible_set_variants_filter == np.atleast_2d(expressible_set_variants_filter[0])).all(axis=1),
-            axis=0)
-        filtered_variants = np.array([eset.compress(np.add(eset, 1).astype(np.bool)) for eset in unfiltered_variants])
-        return np.take_along_axis(np.argsort(filtered_variants,axis=1), np.atleast_2d(when_sorted),   axis=1)
     
-    def eset_symmetry_rows_to_keep(self,partitioned_eset,shape_of_eset,size_of_eset):
-        which_rows_to_keep = np.arange(size_of_eset).reshape(shape_of_eset)
-        minimize_object_under_group_action(
-            which_rows_to_keep,
-            self.eset_symmetry_group(partitioned_eset), skip=1)
-        which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
-        return which_rows_to_keep
+    class expressible_set:
+        def __init__(self,partitioned_eset,inf_prob):
+            self.partitioned_tuple_form=partitioned_eset
+            self.flat_form=[elem for part in self.partitioned_tuple_form for elem in part]
+            #self.shape_of_eset = inf_prob.eset_shape(self.flat_form)
+            self.shape_of_eset=np.take(np.array(inf_prob.inflated_unpacked_cardinalities), self.flat_form)
+            self.size_of_eset = self.shape_of_eset.prod()
+            self.eset_symmetry_rows_to_keep=inf_prob.eset_symmetry_rows_to_keep
+            self.valid_outcomes=inf_prob.valid_outcomes
+            
+        @cached_property
+        def eset_unpacking_rows_to_keep(self):
+            validoutcomes=[self.valid_outcomes(part) for part in self.partitioned_tuple_form]
+            
+            v=validoutcomes[-1]
+            for i in range(len(validoutcomes)-1):
+                v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
+            
+            eset_kept_rows=np.flatnonzero(v.astype(np.int))
+            
+            return eset_kept_rows
+                
+        def eset_discarded_rows_to_trash(self,offset):
+            which_rows_to_keep=np.intersect1d(self.eset_unpacking_rows_to_keep,self.eset_symmetry_rows_to_keep)
+            size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
+            #there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
+            discarded_rows_to_the_back = np.full(self.size_of_eset, 0, dtype=np.int)#make it 0 instead of -1
+            np.put(discarded_rows_to_the_back, which_rows_to_keep, np.arange(size_of_eset_after_symmetry_and_unpacking)+offset)#add the offset here
+            discarded_rows_to_the_back=discarded_rows_to_the_back
+            return discarded_rows_to_the_back
     
     
-    def eset_discarded_rows_to_trash(self,partitioned_eset,offset):
-        shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities), [elem for part in partitioned_eset for elem in part])
-        size_of_eset = shape_of_eset.prod()
-        which_rows_to_keep=np.intersect1d(self.eset_unpacking_rows_to_keep(partitioned_eset),self.eset_symmetry_rows_to_keep(partitioned_eset,shape_of_eset,size_of_eset))
-        size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
-        #there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
-        discarded_rows_to_the_back = np.full(size_of_eset, -(offset+1), dtype=np.int)#make it 0 instead of -1
-        np.put(discarded_rows_to_the_back, which_rows_to_keep, np.arange(size_of_eset_after_symmetry_and_unpacking))#add the offset here
-        discarded_rows_to_the_back=discarded_rows_to_the_back+offset
-        return discarded_rows_to_the_back
+        def columns_to_unique_rows(self, shaped_column_integers):
+            data_shape = shaped_column_integers.shape
+            flat_eset=np.array(self.flat_form)
+            expr_set_size = np.take(data_shape, flat_eset).prod()
+            reshaped_column_integers = shaped_column_integers.transpose(MoveToBack(len(data_shape), flat_eset)).reshape((-1, expr_set_size))            
+            encoding_of_columns_to_monomials = np.empty(shaped_column_integers.size, np.int)
+            encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
+            return encoding_of_columns_to_monomials
     
+    @cached_property
+    def expressible_sets(self):
+        return [self.expressible_set(elem,self) for elem in self.partitioned_unpacked_esets]
     
-    def columns_to_unique_rows(self, shaped_column_integers,flat_eset):
-        data_shape = shaped_column_integers.shape
-        # Can be used for off-diagonal expressible sets with no adjustment!
-        flat_eset=np.array(flat_eset)
-        expr_set_size = np.take(data_shape, flat_eset).prod()
-        reshaped_column_integers = shaped_column_integers.transpose(MoveToBack(len(data_shape), flat_eset)).reshape((-1, expr_set_size))            
-        encoding_of_columns_to_monomials = np.empty(shaped_column_integers.size, np.int)
-        encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
-        return encoding_of_columns_to_monomials
-    
+    @cached_property
     def AMatrix(self):
-        offset=0
+        offset=1
         amatrices=[]
-        for partitioned_eset in self.partitioned_unpacked_esets:
-            disgarded=self.eset_discarded_rows_to_trash(partitioned_eset,offset)
-            amatrix=disgarded.take(self.columns_to_unique_rows(self.shaped_unpacked_column_integers,[elem for part in partitioned_eset for elem in part])).take(self.column_orbits)
+        for partitioned_eset in self.expressible_sets:
+            disgarded=partitioned_eset.eset_discarded_rows_to_trash(offset)
+            amatrix=disgarded.take(partitioned_eset.columns_to_unique_rows(self.shaped_unpacked_column_integers)).take(self.column_orbits)
             offset=np.amax(disgarded)+1
             amatrices.append(amatrix)
         
         AMatrix=np.vstack(tuple(amatrices))#add a flag to SparseMatrixFrom RowsToColumns
-        trash=np.amax(AMatrix)+1
-        trash_positions=np.where(AMatrix==-1)
-        AMatrix[trash_positions[0],trash_positions[1]]=trash
         
         return AMatrix
     
-class inflation_problem(expressible_sets):
-    
-    def __init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities):
-        expressible_sets.__init__(self,hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
-        
+    @cached_property
     def inflation_matrix(self):
-        InfMat=SparseMatrixFromRowsPerColumn(self.AMatrix()).asformat('csr', copy=False)
-        return InfMat[:-1]
+        InfMat=SparseMatrixFromRowsPerColumn(self.AMatrix).asformat('csr', copy=False)
+        return InfMat[1:]
+
         
 if __name__ == '__main__':
     
@@ -245,5 +253,5 @@ if __name__ == '__main__':
     #e=expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     inf=inflation_problem(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     #print(e.AMatrix())
-    print(inf.inflation_matrix().shape)
+    print(inf.inflation_matrix.shape)
     
