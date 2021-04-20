@@ -122,22 +122,22 @@ class inflation_problem(inflated_hypergraph,DAG):
         self.packed_cardinalities=[outcome_cardinalities[observable]**self.setting_cardinalities[observable] for observable in range(self.observed_count)]
         self.inflated_packed_cardinalities_array=np.repeat(self.packed_cardinalities, self.inflation_copies)
         self.inflated_packed_cardinalities_tuple=tuple(self.inflated_packed_cardinalities_array)
-        self.inflated_packed_cardinalities_indecies=np.repeat(np.arange(len(outcome_cardinalities)),self.inflation_copies)
+        self.inflated_packed_cardinalities_indicies=np.repeat(np.arange(len(outcome_cardinalities)),self.inflation_copies)
         self.column_count=self.inflated_packed_cardinalities_array.prod()
         self.shaped_packed_column_integers = np.arange(self.column_count).reshape(self.inflated_packed_cardinalities_tuple)
     
         #Expressible set related properties
         
-        self.unpacked_conf_integers=np.array([list(np.arange(self.setting_cardinalities[packed_obs])+np.array(self.setting_cardinalities)[self.inflated_packed_cardinalities_indecies[:packed_obs_index]].sum()) for packed_obs_index,packed_obs in  enumerate(self.inflated_packed_cardinalities_indecies)],dtype=object)
+        self.unpacked_conf_integers=np.array([list(np.arange(self.setting_cardinalities[packed_obs])+np.array(self.setting_cardinalities)[self.inflated_packed_cardinalities_indicies[:packed_obs_index]].sum()) for packed_obs_index,packed_obs in  enumerate(self.inflated_packed_cardinalities_indicies)],dtype=object)
         #print(self.unpacked_conf_integers)
         self.conf_setting_integers=np.array([range(self.setting_cardinalities[obs]) for obs in range(self.observed_count)],dtype=object)
         #print(self.conf_setting_integers)
-        self.conf_setting_indecies=self.conf_setting_integers[np.repeat(np.arange(len(self.conf_setting_integers)),self.inflation_copies)]
-        self.ravelled_conf_setting_indecies=[i for j in self.conf_setting_indecies for i in j]
-        #print(self.ravelled_conf_setting_indecies)
+        self.conf_setting_indicies=self.conf_setting_integers[np.repeat(np.arange(len(self.conf_setting_integers)),self.inflation_copies)]
+        self.ravelled_conf_setting_indicies=[i for j in self.conf_setting_indicies for i in j]
+        #print(self.ravelled_conf_setting_indicies)
         
-        self.ravelled_conf_var_indecies=np.repeat(np.arange(self.observed_count),np.array(self.setting_cardinalities)*np.array(self.inflation_copies))
-        #print(self.ravelled_conf_var_indecies)
+        self.ravelled_conf_var_indicies=np.repeat(np.arange(self.observed_count),np.array(self.setting_cardinalities)*np.array(self.inflation_copies))
+        #print(self.ravelled_conf_var_indicies)
         
         self.unpacked_inflated_copies=[self.setting_cardinalities[observable]*self.inflation_copies[observable] for observable in range(self.observed_count)]
         self.inflated_unpacked_cardinalities=list(itertools.chain.from_iterable([list(np.repeat(outcome_cardinalities[observable],self.unpacked_inflated_copies[observable])) for observable in range(self.observed_count)]))
@@ -159,8 +159,8 @@ class inflation_problem(inflated_hypergraph,DAG):
         return AMatrix
     
     def _valid_outcomes(self,eset_part_candidate):
-        observables=np.array(self.ravelled_conf_var_indecies)[np.array(eset_part_candidate)]
-        settings_assignment=tuple(np.array(self.ravelled_conf_setting_indecies)[np.array(eset_part_candidate)])
+        observables=np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
+        settings_assignment=tuple(np.array(self.ravelled_conf_setting_indicies)[np.array(eset_part_candidate)])
         outcome_assignments=np.ndindex(self.outcomes_cardinalities)
         for assignment in outcome_assignments:
             validity=True
@@ -212,20 +212,19 @@ class inflation_problem(inflated_hypergraph,DAG):
     
     @cached_property
     def expressible_sets(self):
-        esets=[]
-        for elem in self.partitioned_unpacked_esets:
-            eset=self.expressible_set(elem)
-            #print([self.ravelled_conf_setting_indecies[np.array(part)] for part in eset.partitioned_tuple_form])
-            eset.original_indecies=tuple([tuple(self.ravelled_conf_var_indecies[np.array(part)]) for part in eset.partitioned_tuple_form])
-            eset.settings_of=tuple([tuple(np.array(self.ravelled_conf_setting_indecies)[np.array(part)]) for part in eset.partitioned_tuple_form])
+        esets=tuple(map(self.expressible_set, self.partitioned_unpacked_esets))
+        for eset in esets:
+            #eset=self.expressible_set(elem)
+            #print([self.ravelled_conf_setting_indicies[np.array(part)] for part in eset.partitioned_tuple_form])
+            eset.original_indicies=tuple([tuple(self.ravelled_conf_var_indicies[np.array(part)]) for part in eset.partitioned_tuple_form])
+            eset.settings_of=tuple([tuple(np.array(self.ravelled_conf_setting_indicies)[np.array(part)]) for part in eset.partitioned_tuple_form])
             eset.shape_of_eset=np.take(np.array(self.inflated_unpacked_cardinalities), eset.flat_form)
             eset.size_of_eset = eset.shape_of_eset.prod()
             eset.symmetry_rows_to_keep=self.eset_symmetry_rows_to_keep
             eset.unpacking_rows_to_keep=self.eset_unpacking_rows_to_keep(eset.partitioned_tuple_form)
             eset.discarded_rows_to_trash_no_offsets=self.eset_discarded_rows_to_trash(eset)
             eset.columns_to_rows=self.columns_to_unique_rows(eset.flat_form)
-            
-            esets.append(eset)
+            #esets.append(eset)
         
         return esets
     
@@ -247,7 +246,7 @@ class inflation_problem(inflated_hypergraph,DAG):
     
     @cached_property
     def inflation_matrix(self):
-        InfMat=SparseMatrixFromRowsPerColumn(self.AMatrix).asformat('csr', copy=False)
+        InfMat=SparseMatrixFromRowsPerColumn(self.AMatrix)
         return InfMat
 
         
@@ -263,5 +262,6 @@ if __name__ == '__main__':
     #e=expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     inf=inflation_problem(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     #print(e.AMatrix())
+    print(inf.expressible_sets[0].discarded_rows_to_trash_no_offsets)
     print(inf.inflation_matrix.shape)
     

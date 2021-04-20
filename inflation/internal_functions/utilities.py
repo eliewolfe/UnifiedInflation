@@ -76,9 +76,9 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
     sparse_matrix_output = coo_matrix((np.ones(OnesPositions.size, np.uint), (OnesPositions.ravel(), columnspec)),
                       (rowcount, columncount), dtype=np.uint)
     if there_are_discarded_rows:
-        return sparse_matrix_output[1:]
+        return sparse_matrix_output.asformat('csr', copy=False)[1:]
     else:
-        return sparse_matrix_output
+        return sparse_matrix_output.asformat('csr', copy=False)
 
 
 
