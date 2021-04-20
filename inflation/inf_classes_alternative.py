@@ -159,18 +159,26 @@ class inflation_problem(inflated_hypergraph,DAG):
         return AMatrix
     
     def _valid_outcomes(self,eset_part_candidate):
-        observables=np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
-        settings_assignment=tuple(np.array(self.ravelled_conf_setting_indicies)[np.array(eset_part_candidate)])
-        outcome_assignments=np.ndindex(self.outcomes_cardinalities)
-        for assignment in outcome_assignments:
+        #observables=np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
+        settings_assignment=np.take(self.ravelled_conf_setting_indicies, np.array(eset_part_candidate))
+        # print(observables,settings_assignment,"------------------")
+        outcome_assignments=np.ndindex(np.take(self.outcomes_cardinalities, eset_part_candidate))
+        for outcomes_assigment in outcome_assignments:
             validity=True
-            for i in range(len(settings_assignment)):
-                setting_integer=settings_assignment[i]
-                setting_shape=self.shaped_setting_cardinalities[observables[i]]
-                parents_of=self.inverse_directed_structure[observables[i]]
+            for setting_integer, setting_shape, parents_of in zip(settings_assignment, self.shaped_setting_cardinalities, self.inverse_directed_structure):
                 settings_of_v = np.unravel_index(setting_integer, setting_shape)
-                outcomes_relevant_to_v = np.compress(parents_of, assignment)
-                validity=validity and np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
+                outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
+                if not np.array_equal(settings_of_v[1:], outcomes_relevant_to_v):
+                    validity = False
+                    break
+                #validity=validity and np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
+            # for i in range(len(settings_assignment)):
+            #     setting_integer=settings_assignment[i]
+            #     setting_shape=self.shaped_setting_cardinalities[observables[i]]
+            #     parents_of=self.inverse_directed_structure[observables[i]]
+            #     settings_of_v = np.unravel_index(setting_integer, setting_shape)
+            #     outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
+            #     validity=validity and np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
             yield validity
     def valid_outcomes(self,eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
