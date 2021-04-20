@@ -189,6 +189,7 @@ class inflation_problem(inflated_hypergraph,DAG):
     def eset_discarded_rows_to_trash(self,eset):
         which_rows_to_keep=np.intersect1d(eset.unpacking_rows_to_keep,eset.symmetry_rows_to_keep)
         size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
+        eset.final_number_of_rows = size_of_eset_after_symmetry_and_unpacking
         #there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
         discarded_rows_to_the_back = np.full(eset.size_of_eset, 0, dtype=np.int)#make it 0 instead of -1
         np.put(discarded_rows_to_the_back, which_rows_to_keep, np.arange(size_of_eset_after_symmetry_and_unpacking)+1)#add the offset here
@@ -225,19 +226,28 @@ class inflation_problem(inflated_hypergraph,DAG):
             eset.discarded_rows_to_trash_no_offsets=self.eset_discarded_rows_to_trash(eset)
             eset.columns_to_rows=self.columns_to_unique_rows(eset.flat_form)
             #esets.append(eset)
-        
+
+        offset = 0
+        for eset in esets:
+            offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
+            offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
+            eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+offset_array
+            offset = offset + eset.final_number_of_rows
+
+        #print(esets[-1].discarded_rows_to_trash)
         return esets
     
     @cached_property
     def AMatrix(self):
-        offset=0
+        #offset=0
         amatrices=[]
         for eset in self.expressible_sets:
-            offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
-            offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
-            eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+offset_array
+            #eset.offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
+            #eset.offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
+            #eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+eset.offset_array
             amatrix=eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
-            offset=np.amax(eset.discarded_rows_to_trash)
+            #offset=np.amax(eset.discarded_rows_to_trash)
+            #offset = offset + eset.final_number_of_rows
             amatrices.append(amatrix)
         
         AMatrix=np.vstack(tuple(amatrices))#add a flag to SparseMatrixFrom RowsToColumns
@@ -262,6 +272,8 @@ if __name__ == '__main__':
     #e=expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     inf=inflation_problem(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     #print(e.AMatrix())
-    print(inf.expressible_sets[0].discarded_rows_to_trash_no_offsets)
     print(inf.inflation_matrix.shape)
+    # print(inf.expressible_sets[3].discarded_rows_to_trash)
+    # print(inf.expressible_sets[3].offset_array)
+
     
