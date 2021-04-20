@@ -159,15 +159,17 @@ class inflation_problem(inflated_hypergraph,DAG):
         return AMatrix
     
     def _valid_outcomes(self,eset_part_candidate):
-        #observables=np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
+        observables=np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
         settings_assignment=np.take(self.ravelled_conf_setting_indicies, np.array(eset_part_candidate))
         # print(observables,settings_assignment,"------------------")
-        outcome_assignments=np.ndindex(np.take(self.outcomes_cardinalities, eset_part_candidate))
+        outcome_assignments=np.ndindex(tuple(np.take(self.outcomes_cardinalities, observables)))
         for outcomes_assigment in outcome_assignments:
             validity=True
             for setting_integer, setting_shape, parents_of in zip(settings_assignment, self.shaped_setting_cardinalities, self.inverse_directed_structure):
                 settings_of_v = np.unravel_index(setting_integer, setting_shape)
                 outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
+                if np.array_equal(eset_part_candidate, [2, 11, 14]):
+                    print(settings_of_v, outcomes_relevant_to_v)
                 if not np.array_equal(settings_of_v[1:], outcomes_relevant_to_v):
                     validity = False
                     break
