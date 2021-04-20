@@ -248,7 +248,7 @@ class inflation_problem(inflated_hypergraph,DAG):
     @cached_property
     def inflation_matrix(self):
         InfMat=SparseMatrixFromRowsPerColumn(self.AMatrix).asformat('csr', copy=False)
-        return InfMat[1:]
+        return InfMat
 
         
 if __name__ == '__main__':

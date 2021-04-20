@@ -73,8 +73,13 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
     else:
         ar_to_broadcast = np.arange(columncount)
     columnspec = np.broadcast_to(ar_to_broadcast, OnesPositions.shape).ravel()
-    return coo_matrix((np.ones(OnesPositions.size, np.uint), (OnesPositions.ravel(), columnspec)),
+    sparse_matrix_output = coo_matrix((np.ones(OnesPositions.size, np.uint), (OnesPositions.ravel(), columnspec)),
                       (rowcount, columncount), dtype=np.uint)
+    if there_are_discarded_rows:
+        return sparse_matrix_output[1:]
+    else:
+        return sparse_matrix_output
+
 
 
 if __name__ == '__main__':
