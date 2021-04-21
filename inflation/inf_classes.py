@@ -263,20 +263,12 @@ class inflation_problem(inflated_hypergraph, DAG):
 
     @cached_property
     def AMatrix(self):
-        # offset=0
-        amatrices = []
-        for eset in self.expressible_sets:
-            # eset.offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
-            # eset.offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
-            # eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+eset.offset_array
-            amatrix = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
-            # offset=np.amax(eset.discarded_rows_to_trash)
-            # offset = offset + eset.final_number_of_rows
-            amatrices.append(amatrix)
-
-        AMatrix = np.vstack(tuple(amatrices))  # add a flag to SparseMatrixFrom RowsToColumns
-
-        return AMatrix
+        single_shape = list(self.column_orbits.shape)
+        amatrices = np.empty([len(self.expressible_sets)] + single_shape, np.int)
+        for i, eset in enumerate(self.expressible_sets):
+            amatrices[i] = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
+        single_shape[0] = -1
+        return amatrices.reshape(tuple(single_shape))
 
     @cached_property
     def inflation_matrix(self):
