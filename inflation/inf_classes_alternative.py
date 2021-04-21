@@ -184,7 +184,6 @@ class inflation_problem(inflated_hypergraph, DAG):
     def _valid_outcomes(self, eset_part_candidate):
         observables = np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
         settings_assignment = np.take(self.ravelled_conf_setting_indicies, np.array(eset_part_candidate))
-        # print(observables,settings_assignment,"------------------")
         outcome_assignments = np.ndindex(tuple(np.take(self.outcomes_cardinalities, observables)))
         for outcomes_assigment in outcome_assignments:
             validity = True
@@ -196,21 +195,13 @@ class inflation_problem(inflated_hypergraph, DAG):
                 if not np.array_equal(settings_of_v[1:], outcomes_relevant_to_v):
                     validity = False
                     break
-                # validity=validity and np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
-            # for i in range(len(settings_assignment)):
-            #     setting_integer=settings_assignment[i]
-            #     setting_shape=self.shaped_setting_cardinalities[observables[i]]
-            #     parents_of=self.inverse_directed_structure[observables[i]]
-            #     settings_of_v = np.unravel_index(setting_integer, setting_shape)
-            #     outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
-            #     validity=validity and np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
             yield validity
 
     def valid_outcomes(self, eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
 
-    def eset_unpacking_rows_to_keep(self,partitioned_tuple_form):
-        validoutcomes=[self.valid_outcomes(part) for part in partitioned_tuple_form]
+    def eset_unpacking_rows_to_keep(self,eset):
+        validoutcomes=[self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
         
         v=validoutcomes[-1]
         for i in range(len(validoutcomes)-1):
@@ -218,7 +209,8 @@ class inflation_problem(inflated_hypergraph, DAG):
         
         eset_kept_rows=np.flatnonzero(v.astype(np.int))
         
-        return eset_kept_rows
+        eset.unpacking_rows_to_keep = eset_kept_rows
+        #return eset_kept_rows
 
     def eset_discarded_rows_to_trash(self, eset):
         which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
@@ -229,30 +221,28 @@ class inflation_problem(inflated_hypergraph, DAG):
         np.put(discarded_rows_to_the_back, which_rows_to_keep,
                np.arange(size_of_eset_after_symmetry_and_unpacking) + 1)  # add the offset here
         discarded_rows_to_the_back = discarded_rows_to_the_back
-        return discarded_rows_to_the_back
+        eset.discarded_rows_to_trash_no_offsets = discarded_rows_to_the_back
+        #return discarded_rows_to_the_back
 
-    def columns_to_unique_rows(self, flat_eset):
+    def columns_to_unique_rows(self, eset):
         data_shape = self.shaped_unpacked_column_integers.shape
-        # Can be used for off-diagonal expressible sets with no adjustment!
-        flat_eset = np.array(flat_eset)
-        expr_set_size = np.take(data_shape, flat_eset).prod()
         reshaped_column_integers = self.shaped_unpacked_column_integers.transpose(
-            MoveToBack(len(data_shape), flat_eset)).reshape((-1, expr_set_size))
+            MoveToBack(len(data_shape), eset.flat_form)).reshape((-1, eset.size_of_eset))
         encoding_of_columns_to_monomials = np.empty(self.shaped_unpacked_column_integers.size, np.int)
-        encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(expr_set_size)
-        return encoding_of_columns_to_monomials
+        encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(eset.size_of_eset)
+        eset.columns_to_rows = encoding_of_columns_to_monomials
+        #return encoding_of_columns_to_monomials
 
     class expressible_set:
         def __init__(self, partitioned_eset):
             self.partitioned_tuple_form = partitioned_eset
-            self.flat_form = [elem for part in self.partitioned_tuple_form for elem in part]
+            self.flat_form = np.array([elem for part in self.partitioned_tuple_form for elem in part])
 
     @cached_property
     def expressible_sets(self):
         esets = tuple(map(self.expressible_set, self.partitioned_unpacked_esets))
+        offset = 0
         for eset in esets:
-            # eset=self.expressible_set(elem)
-            # print([self.ravelled_conf_setting_indicies[np.array(part)] for part in eset.partitioned_tuple_form])
             eset.original_indicies = tuple(
                 [tuple(self.ravelled_conf_var_indicies[np.array(part)]) for part in eset.partitioned_tuple_form])
             eset.settings_of = tuple([tuple(np.array(self.ravelled_conf_setting_indicies)[np.array(part)]) for part in
@@ -260,19 +250,15 @@ class inflation_problem(inflated_hypergraph, DAG):
             eset.shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities), eset.flat_form)
             eset.size_of_eset = eset.shape_of_eset.prod()
             eset.symmetry_rows_to_keep = self.eset_symmetry_rows_to_keep
-            eset.unpacking_rows_to_keep = self.eset_unpacking_rows_to_keep(eset.partitioned_tuple_form)
-            eset.discarded_rows_to_trash_no_offsets = self.eset_discarded_rows_to_trash(eset)
-            eset.columns_to_rows = self.columns_to_unique_rows(eset.flat_form)
-            # esets.append(eset)
-
-        offset = 0
-        for eset in esets:
+            self.eset_unpacking_rows_to_keep(eset)
+            self.eset_discarded_rows_to_trash(eset)
+            self.columns_to_unique_rows(eset)
+            #setting offsets
             offset_array = np.zeros(len(eset.discarded_rows_to_trash_no_offsets), dtype=np.int)
             offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)] = offset
             eset.discarded_rows_to_trash = eset.discarded_rows_to_trash_no_offsets + offset_array
             offset = offset + eset.final_number_of_rows
 
-        # print(esets[-1].discarded_rows_to_trash)
         return esets
 
     @cached_property
