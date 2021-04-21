@@ -139,8 +139,8 @@ class inflation_problem(inflated_hypergraph, DAG):
         self.unpacked_conf_integers = np.array([list(
             np.arange(self.setting_cardinalities[packed_obs]) + np.array(self.setting_cardinalities)[
                 self.inflated_packed_cardinalities_indicies[:packed_obs_index]].sum()) for packed_obs_index, packed_obs
-                                                in enumerate(self.inflated_packed_cardinalities_indicies)],
-                                               dtype=object)
+            in enumerate(self.inflated_packed_cardinalities_indicies)],
+            dtype=object)
         # print(self.unpacked_conf_integers)
         self.conf_setting_integers = np.array(
             [range(self.setting_cardinalities[obs]) for obs in range(self.observed_count)], dtype=object)
@@ -200,17 +200,17 @@ class inflation_problem(inflated_hypergraph, DAG):
     def valid_outcomes(self, eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
 
-    def eset_unpacking_rows_to_keep(self,eset):
-        validoutcomes=[self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
-        
-        v=validoutcomes[-1]
-        for i in range(len(validoutcomes)-1):
-            v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
-        
-        eset_kept_rows=np.flatnonzero(v.astype(np.int))
-        
+    def eset_unpacking_rows_to_keep(self, eset):
+        validoutcomes = [self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
+
+        v = validoutcomes[-1]
+        for i in range(len(validoutcomes) - 1):
+            v = np.kron(validoutcomes[len(validoutcomes) - 1 - i], v)
+
+        eset_kept_rows = np.flatnonzero(v.astype(np.int))
+
         eset.unpacking_rows_to_keep = eset_kept_rows
-        #return eset_kept_rows
+        # return eset_kept_rows
 
     def eset_discarded_rows_to_trash(self, eset):
         which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
@@ -222,7 +222,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                np.arange(size_of_eset_after_symmetry_and_unpacking) + 1)  # add the offset here
         discarded_rows_to_the_back = discarded_rows_to_the_back
         eset.discarded_rows_to_trash_no_offsets = discarded_rows_to_the_back
-        #return discarded_rows_to_the_back
+        # return discarded_rows_to_the_back
 
     def columns_to_unique_rows(self, eset):
         data_shape = self.shaped_unpacked_column_integers.shape
@@ -231,7 +231,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         encoding_of_columns_to_monomials = np.empty(self.shaped_unpacked_column_integers.size, np.int)
         encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(eset.size_of_eset)
         eset.columns_to_rows = encoding_of_columns_to_monomials
-        #return encoding_of_columns_to_monomials
+        # return encoding_of_columns_to_monomials
 
     class expressible_set:
         def __init__(self, partitioned_eset):
@@ -253,7 +253,7 @@ class inflation_problem(inflated_hypergraph, DAG):
             self.eset_unpacking_rows_to_keep(eset)
             self.eset_discarded_rows_to_trash(eset)
             self.columns_to_unique_rows(eset)
-            #setting offsets
+            # setting offsets
             offset_array = np.zeros(len(eset.discarded_rows_to_trash_no_offsets), dtype=np.int)
             offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)] = offset
             eset.discarded_rows_to_trash = eset.discarded_rows_to_trash_no_offsets + offset_array
