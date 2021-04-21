@@ -209,15 +209,15 @@ class inflation_problem(inflated_hypergraph, DAG):
     def valid_outcomes(self, eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
 
-    def eset_unpacking_rows_to_keep(self,partitioned_tuple_form):
-        validoutcomes=[self.valid_outcomes(part) for part in partitioned_tuple_form]
-        
-        v=validoutcomes[-1]
-        for i in range(len(validoutcomes)-1):
-            v=np.kron(validoutcomes[len(validoutcomes)-1-i],v)
-        
-        eset_kept_rows=np.flatnonzero(v.astype(np.int))
-        
+    def eset_unpacking_rows_to_keep(self, partitioned_tuple_form):
+        validoutcomes = [self.valid_outcomes(part) for part in partitioned_tuple_form]
+        # print(validoutcomes)
+        v = validoutcomes[-1]
+        for i in range(len(validoutcomes) - 1):
+            v = np.kron(validoutcomes[len(validoutcomes) - 1 - i], v)
+
+        eset_kept_rows = np.flatnonzero(v.astype(np.int))
+
         return eset_kept_rows
 
     def eset_discarded_rows_to_trash(self, eset):
@@ -277,20 +277,25 @@ class inflation_problem(inflated_hypergraph, DAG):
 
     @cached_property
     def AMatrix(self):
+        single_shape = list(self.column_orbits.shape)
+        amatrices = np.empty([len(self.expressible_sets)] + single_shape, np.int)
         # offset=0
-        amatrices = []
-        for eset in self.expressible_sets:
+        #amatrices = []
+
+        for i, eset in enumerate(self.expressible_sets):
             # eset.offset_array=np.zeros(len(eset.discarded_rows_to_trash_no_offsets),dtype=np.int)
             # eset.offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)]=offset
             # eset.discarded_rows_to_trash=eset.discarded_rows_to_trash_no_offsets+eset.offset_array
-            amatrix = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
+            # amatrix = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
+            amatrices[i] = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
+            # print(amatrix.shape)
             # offset=np.amax(eset.discarded_rows_to_trash)
             # offset = offset + eset.final_number_of_rows
-            amatrices.append(amatrix)
-
-        AMatrix = np.vstack(tuple(amatrices))  # add a flag to SparseMatrixFrom RowsToColumns
-
-        return AMatrix
+            # amatrices.append(amatrix)
+        single_shape[0] = -1
+        return amatrices.reshape(tuple(single_shape))
+        #AMatrix = np.vstack(tuple(amatrices))  # add a flag to SparseMatrixFrom RowsToColumns
+        #return AMatrix
 
     @cached_property
     def inflation_matrix(self):
