@@ -62,7 +62,6 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
     #First dimension indicates which ORBIT we are considering.
     #Second dimension indicates which COLUMN we are listing rows for.
     there_are_discarded_rows=np.any(OnesPositions==0)
-    
     if not there_are_discarded_rows:
         OnesPositions=OnesPositions-1
     

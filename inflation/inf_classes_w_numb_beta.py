@@ -117,13 +117,56 @@ class inflated_hypergraph:
         which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
         return which_rows_to_keep
 
+class observational_data:
+    
+    @staticmethod
+    def MixedCardinalityBaseConversion(cardinality, string):
+        #card = np.array([cardinality[i] ** (len(cardinality) - (i + 1)) for i in range(len(cardinality))])
+        card = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(cardinality))))[:-1])
+        str_to_array = np.array([int(i) for i in string])
+        return np.dot(card, str_to_array)
+    
+    def __init__(self,outcome_cardinalities ,rawdata):
+        
+        self.outcome_cardinalities_array = np.array(outcome_cardinalities)
+        self.original_card_product = np.prod(self.outcome_cardinalities_array)
+        
+        if rawdata == None:  # When only the number of observed variables is specified, but no actual data, we fake it.
+            
+            self.data_flat = np.full(self.original_card_product, 1.0 / self.original_card_product)
+            self.data_size = self.data_flat.size            
 
-class inflation_problem(inflated_hypergraph, DAG):
+        elif isinstance(rawdata[0],
+                        str):  # When the input is in the form ['101','100'] for support certification purposes
+            numevents = len(rawdata)
+            self.data_observed_count = len(rawdata[0])
+            if self.data_observed_count !=len(outcome_cardinalities):
+                    raise ValueError("Outcome cardinality specification does not match the number of observed variables inferred from the data.")
+            data = np.zeros(self.original_card_product)
+            data[list(map(lambda s: self.MixedCardinalityBaseConversion(self.outcome_cardinalities_array , s), rawdata))] = 1 / numevents
+            self.data_flat = data
+            self.data_size = self.data_flat.size
+
+        else:
+            self.data_flat = np.array(rawdata).ravel()
+            self.size = self.data_flat.size
+            norm = np.linalg.norm(self.data_flat, ord=1)
+            if norm == 0:
+                self.data_flat = np.full(1.0 / self.size, self.size)
+            else:  # Manual renormalization.
+                self.data_flat = self.data_flat / norm
+
+        self.data_reshaped = np.reshape(self.data_flat, outcome_cardinalities)
+
+class inflation_problem(inflated_hypergraph, DAG, observational_data):
 
     def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
-                 private_setting_cardinalities):
+                 private_setting_cardinalities, rawdata = None):
+        
         inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
         DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
+        observational_data.__init__(self,outcome_cardinalities,rawdata)
+        
         self.packed_cardinalities = [outcome_cardinalities[observable] ** self.setting_cardinalities[observable] for
                                      observable in range(self.observed_count)]
         self.inflated_packed_cardinalities_array = np.repeat(self.packed_cardinalities, self.inflation_copies)
@@ -213,12 +256,12 @@ class inflation_problem(inflated_hypergraph, DAG):
         # return eset_kept_rows
 
     def eset_discarded_rows_to_trash(self, eset):
-        which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
-        size_of_eset_after_symmetry_and_unpacking = len(which_rows_to_keep)
+        eset.which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
+        size_of_eset_after_symmetry_and_unpacking = len(eset.which_rows_to_keep)
         eset.final_number_of_rows = size_of_eset_after_symmetry_and_unpacking
         # there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
         discarded_rows_to_the_back = np.full(eset.size_of_eset, 0, dtype=np.int)  # make it 0 instead of -1
-        np.put(discarded_rows_to_the_back, which_rows_to_keep,
+        np.put(discarded_rows_to_the_back, eset.which_rows_to_keep,
                np.arange(size_of_eset_after_symmetry_and_unpacking) + 1)  # add the offset here
         discarded_rows_to_the_back = discarded_rows_to_the_back
         eset.discarded_rows_to_trash_no_offsets = discarded_rows_to_the_back
@@ -232,6 +275,14 @@ class inflation_problem(inflated_hypergraph, DAG):
         encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(eset.size_of_eset)
         eset.columns_to_rows = encoding_of_columns_to_monomials
         # return encoding_of_columns_to_monomials
+
+    def generate_numeric_b_block(self, eset):
+            marginals = (np.einsum(self.data_reshaped, np.arange(self.observed_count), np.array(sub_eset)) for sub_eset in eset.original_indicies)
+
+            einsumargs = list(itertools.chain.from_iterable(zip(marginals,[np.array(elem) for elem in eset.partitioned_tuple_form])))
+            einsumargs.append(eset.flat_form)
+            b_block = np.einsum(*einsumargs)
+            eset.numeric_b_block = np.take(b_block,eset.which_rows_to_keep)
 
     class expressible_set:
         def __init__(self, partitioned_eset):
@@ -253,11 +304,13 @@ class inflation_problem(inflated_hypergraph, DAG):
             self.eset_unpacking_rows_to_keep(eset)
             self.eset_discarded_rows_to_trash(eset)
             self.columns_to_unique_rows(eset)
+            self.generate_numeric_b_block(eset)
             # setting offsets
             offset_array = np.zeros(len(eset.discarded_rows_to_trash_no_offsets), dtype=np.int)
             offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)] = offset
             eset.discarded_rows_to_trash = eset.discarded_rows_to_trash_no_offsets + offset_array
             offset = offset + eset.final_number_of_rows
+
         return esets
 
     @cached_property
@@ -273,7 +326,10 @@ class inflation_problem(inflated_hypergraph, DAG):
     def inflation_matrix(self):
         InfMat = SparseMatrixFromRowsPerColumn(self.AMatrix)
         return InfMat
-
+    
+    @cached_property
+    def b_vector(self):
+        return np.hstack([eset.numeric_b_block for eset in self.expressible_sets])
 
 if __name__ == '__main__':
     hypergraph = np.array([[1, 1, 0], [0, 1, 1]])
@@ -288,5 +344,6 @@ if __name__ == '__main__':
                             private_setting_cardinalities)
     # print(e.AMatrix())
     print(inf.inflation_matrix.shape)
+    print(inf.b_vector.shape)
     # print(inf.expressible_sets[3].discarded_rows_to_trash)
     # print(inf.expressible_sets[3].offset_array)
