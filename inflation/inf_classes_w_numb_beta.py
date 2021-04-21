@@ -20,9 +20,15 @@ else:
     cached_property = property
 
 from wrapper import *
+if __name__ == '__main__':
+    import sys
+    import pathlib
+
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action, \
     minimize_object_under_group_action
 from internal_functions.utilities import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
+
 
 
 class inflated_hypergraph:
