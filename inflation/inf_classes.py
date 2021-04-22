@@ -225,6 +225,14 @@ class inflation_problem(inflated_hypergraph, DAG):
         # return discarded_rows_to_the_back
 
     def columns_to_unique_rows(self, eset):
+        """"
+        Since an unpacked eset has constant setting assignments, it means that the events in the rows
+        corresponding to it are all locally orthogonal. That is, a column can hit AT MOST one row from
+        this row block.
+        As such. eset_discarded_rows_to_trash.take(eset.columns_to_rows) yields a 1d list where position indicates
+        which column of the inflation matrix we are talking about and the value in the list indicates which row IN THIS BLOCK
+        get "hit" by said column.
+        """
         data_shape = self.shaped_unpacked_column_integers.shape
         reshaped_column_integers = self.shaped_unpacked_column_integers.transpose(
             MoveToBack(len(data_shape), eset.flat_form)).reshape((-1, eset.size_of_eset))
