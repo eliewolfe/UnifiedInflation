@@ -123,7 +123,7 @@ class inflated_hypergraph:
         which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
         return which_rows_to_keep
 
-class observational_data:
+class observational_data(DAG):
     
     @staticmethod
     def MixedCardinalityBaseConversion(cardinality, string):
@@ -131,47 +131,70 @@ class observational_data:
         card = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(cardinality))))[:-1])
         str_to_array = np.array([int(i) for i in string])
         return np.dot(card, str_to_array)
-    
-    def __init__(self,outcome_cardinalities ,rawdata):
-        
-        self.outcome_cardinalities_array = np.array(outcome_cardinalities)
-        self.original_card_product = np.prod(self.outcome_cardinalities_array)
-        
-        if rawdata == None:  # When only the number of observed variables is specified, but no actual data, we fake it.
+    @staticmethod
+    def ReverseMixedCardinalityBaseConversion(cardinality, num):
+        n=num
+        st=[]
+        for i in range(len(cardinality)):
             
-            self.data_flat = np.full(self.original_card_product, 1.0 / self.original_card_product)
-            self.data_size = self.data_flat.size            
-
-        elif isinstance(rawdata[0],
-                        str):  # When the input is in the form ['101','100'] for support certification purposes
-            numevents = len(rawdata)
-            self.data_observed_count = len(rawdata[0])
-            if self.data_observed_count !=len(outcome_cardinalities):
-                    raise ValueError("Outcome cardinality specification does not match the number of observed variables inferred from the data.")
-            data = np.zeros(self.original_card_product)
-            data[list(map(lambda s: self.MixedCardinalityBaseConversion(self.outcome_cardinalities_array , s), rawdata))] = 1 / numevents
-            self.data_flat = data
-            self.data_size = self.data_flat.size
-
+            j=len(cardinality)-i-1
+            remainder=int(np.remainder(n,cardinality[j]))
+            quotient=(n-remainder)/cardinality[j]
+            st.append(remainder)
+            n=quotient
+            if n < 1:
+                break
+        st.reverse()
+        r=len(cardinality)-len(st)
+        if r!=0:
+            s1=[k for k in np.zeros((1,r),np.uint)[0]]
+            s1.extend(st)
+            st=s1
+        return np.array(st)     
+    
+    def __init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities, rawdata):
+        DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
+        self.knowable_original_probabilities=self.knowable_original_probabilities[0]#Change this!
+        self.outcome_cardinalities_array = np.array(self.outcomes_cardinalities)
+        self.setting_cardinalities_array = np.array(self.setting_cardinalities)
+        self.combined_card_product = np.prod(np.array(self.all_moments_shape))
+        self.outcome_card_product = np.prod(self.outcome_cardinalities_array)
+        self.settings=[''.join(str(setting) for setting in self.ReverseMixedCardinalityBaseConversion(list(self.all_moments_shape), num)[self.outcome_card_product:]) for num in self.knowable_original_probabilities]
+        
+        if rawdata == None:  # When only the number of observed variables is specified, but no actual data, we fake it
+            self.data_flat_filtered = np.array([1.0/self.settings.count(setting) for setting in self.settings])
+            #self.data_size = self.data_flat.size
+            self.data_flat=np.zeros(self.combined_card_product,dtype=np.float)
+            np.put(self.data_flat,self.knowable_original_probabilities,self.data_flat)
+            self.data_reshaped=self.data_flat.reshape(self.all_moments_shape)
+        
+        #elif isinstance(rawdata[0],
+         #               str):  # When the input is in the form ['101','100'] for support certification purposes
+          #  self.data_observed_count = len(rawdata[0])
+           # if self.data_observed_count !=len(outcome_cardinalities):
+           #         raise ValueError("Outcome cardinality specification does not match the number of observed variables inferred from the data.")
+           # data = np.zeros(self.original_card_product)
+           # data[list(map(lambda s: self.MixedCardinalityBaseConversion(self.outcome_cardinalities_array , s), rawdata))] = 1 / numevents
+           # self.data_flat = data
+           # self.data_size = self.data_flat.size
+        
         else:
-            self.data_flat = np.array(rawdata).ravel()
-            self.size = self.data_flat.size
-            norm = np.linalg.norm(self.data_flat, ord=1)
-            if norm == 0:
-                self.data_flat = np.full(1.0 / self.size, self.size)
-            else:  # Manual renormalization.
-                self.data_flat = self.data_flat / norm
+            self.data_flat_filtered = np.array(rawdata,dtype=np.float)
+            #self.data_size = self.data_flat.size
+            normalization_check = np.array([self.data_flat[np.where(self.settings==setting)[0]].sum() for setting in self.settings])
+            self.data_flat_filtered=np.divide(self.data_flat_filtered,normalization_check)
+            self.data_flat=np.zeros(self.combined_card_product,dtype=np.float)
+            np.put(self.data_flat,self.knowable_original_probabilities,self.data_flat)
+            self.data_reshaped=self.data_flat.reshape(self.all_moments_shape)
 
-        self.data_reshaped = np.reshape(self.data_flat, outcome_cardinalities)
-
-class inflation_problem(inflated_hypergraph, DAG, observational_data):
+class inflation_problem(inflated_hypergraph, observational_data):
 
     def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
                  private_setting_cardinalities, rawdata = None):
         
+        observational_data.__init__(self,hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities, rawdata)
         inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
-        DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
-        observational_data.__init__(self,outcome_cardinalities,rawdata)
+        
         
         self.packed_cardinalities = [outcome_cardinalities[observable] ** self.setting_cardinalities[observable] for
                                      observable in range(self.observed_count)]
@@ -283,7 +306,7 @@ class inflation_problem(inflated_hypergraph, DAG, observational_data):
         # return encoding_of_columns_to_monomials
 
     def generate_numeric_b_block(self, eset):
-            marginals = (np.einsum(self.data_reshaped, np.arange(self.observed_count), np.array(sub_eset)) for sub_eset in eset.original_indicies)
+            marginals = (np.einsum(self.data_reshaped[tuple([Ellipsis]+list(eset.settings_of[sub_eset_index]))], np.arange(self.observed_count), np.array(eset.original_indicies[sub_eset_index])) for sub_eset_index in range(len(eset.original_indicies)))
 
             einsumargs = list(itertools.chain.from_iterable(zip(marginals,[np.array(elem) for elem in eset.partitioned_tuple_form])))
             einsumargs.append(eset.flat_form)

@@ -30,15 +30,26 @@ class DAG(Network):
                                         zip(private_setting_cardinalities, self.extra_setting_cardinalities)]
         Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
 
+    #def _knowable_original_probabilities(self):
+    #    for assignment in np.ndindex(self.all_moments_shape):
+    #        settings_assignment = assignment[:self.num_observed_vars]
+    #        outcomes_assigment = assignment[self.num_observed_vars:]
+    #        for setting_integer, setting_shape, parents_of in zip(settings_assignment, self.shaped_setting_cardinalities, self.inverse_directed_structure):
+    #            settings_of_v = np.unravel_index(setting_integer, setting_shape)
+    #            outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
+    #            yield np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
     def _knowable_original_probabilities(self):
         for assignment in np.ndindex(self.all_moments_shape):
             settings_assignment = assignment[:self.num_observed_vars]
             outcomes_assigment = assignment[self.num_observed_vars:]
+            knowable=True
             for setting_integer, setting_shape, parents_of in zip(settings_assignment, self.shaped_setting_cardinalities, self.inverse_directed_structure):
                 settings_of_v = np.unravel_index(setting_integer, setting_shape)
                 outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
-                yield np.array_equal(settings_of_v[1:], outcomes_relevant_to_v)
-
+                if not np.array_equal(settings_of_v[1:], outcomes_relevant_to_v):
+                    knowable = False
+                    break
+            yield knowable
     @cached_property
     def knowable_original_probabilities(self):
         return np.fromiter(self._knowable_original_probabilities(), np.bool).nonzero()
