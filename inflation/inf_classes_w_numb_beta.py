@@ -198,7 +198,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         self.conf_setting_indicies = self.conf_setting_integers[
             np.repeat(np.arange(len(self.conf_setting_integers)), self.inflation_copies)]
         self.ravelled_conf_setting_indicies = [i for j in self.conf_setting_indicies for i in j]
-        # print(self.ravelled_conf_setting_indicies)
+        #print(self.ravelled_conf_setting_indicies)
 
         self.ravelled_conf_var_indicies = np.repeat(np.arange(self.observed_count),
                                                     np.array(self.setting_cardinalities) * np.array(
@@ -253,9 +253,11 @@ class inflation_problem(inflated_hypergraph, DAG):
     def eset_unpacking_rows_to_keep(self, eset):
         validoutcomes = [self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
 
-        v = validoutcomes[-1]
-        for i in range(len(validoutcomes) - 1):
-            v = np.kron(validoutcomes[len(validoutcomes) - 1 - i], v)
+        # v = validoutcomes[-1]
+        v = validoutcomes[0]
+        for i in range(len(validoutcomes)-1):
+            v = np.kron(v,validoutcomes[i+1])
+            #v = np.kron(v, validoutcomes[len(validoutcomes) - 1 - i])
 
         eset_kept_rows = np.flatnonzero(v.astype(np.int))
 
@@ -309,11 +311,13 @@ class inflation_problem(inflated_hypergraph, DAG):
         loc_of_each_part=np.add.accumulate(np.array([0]+size_of_each_part))
         num_b=[]
         #print(eset.which_rows_to_keep)
+        #print(eset.settings_of)
         for row in eset.which_rows_to_keep:
             eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
             #print(eset_outcomes)
             product=1
-            for part_index in range(len(eset.partitioned_tuple_form)):
+            #for part_index in range(len(eset.partitioned_tuple_form)):
+            for part_index in [0]:
                 part_outcomes=eset_outcomes[loc_of_each_part[part_index]:loc_of_each_part[part_index+1]]
                 #print(part_outcomes)
                 #print(eset.settings_of)

@@ -29,6 +29,11 @@ class DAG(Network):
         self.shaped_setting_cardinalities = [np.hstack((sett, cards[cards.nonzero()])) for sett, cards in
                                         zip(private_setting_cardinalities, self.extra_setting_cardinalities)]
         Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
+        self.knowable_moments_shape = private_setting_cardinalities + self.outcomes_cardinalities
+
+
+    def to_effective_settings(self, outcomes_assigment, private_settings_assignment):
+       return True
 
     #def _knowable_original_probabilities(self):
     #    for assignment in np.ndindex(self.all_moments_shape):
@@ -50,9 +55,10 @@ class DAG(Network):
                     knowable = False
                     break
             yield knowable
+
     @cached_property
     def knowable_original_probabilities(self):
-        return np.fromiter(self._knowable_original_probabilities(), np.bool).nonzero()[0]
+        return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), np.bool))
 
 
 
