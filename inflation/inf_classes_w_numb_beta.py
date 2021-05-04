@@ -28,6 +28,7 @@ if __name__ == '__main__':
 from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action, \
     minimize_object_under_group_action
 from internal_functions.utilities import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
+import functools
 
 
 
@@ -253,11 +254,13 @@ class inflation_problem(inflated_hypergraph, DAG):
     def eset_unpacking_rows_to_keep(self, eset):
         validoutcomes = [self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
 
-        # v = validoutcomes[-1]
-        v = validoutcomes[0]
-        for i in range(len(validoutcomes)-1):
-            v = np.kron(v,validoutcomes[i+1])
-            #v = np.kron(v, validoutcomes[len(validoutcomes) - 1 - i])
+        # # v = validoutcomes[-1]
+        # v = validoutcomes[0]
+        # for i in range(len(validoutcomes)-1):
+        #     v = np.kron(v,validoutcomes[i+1])
+        #     #v = np.kron(v, validoutcomes[len(validoutcomes) - 1 - i])
+
+        v = functools.reduce(np.kron,validoutcomes)
 
         eset_kept_rows = np.flatnonzero(v.astype(np.int))
 
