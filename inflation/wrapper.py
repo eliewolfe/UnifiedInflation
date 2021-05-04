@@ -52,7 +52,7 @@ class DAG(Network):
             yield knowable
     @cached_property
     def knowable_original_probabilities(self):
-        return np.fromiter(self._knowable_original_probabilities(), np.bool).nonzero()
+        return np.fromiter(self._knowable_original_probabilities(), np.bool).nonzero()[0]
 
 
 

@@ -123,77 +123,55 @@ class inflated_hypergraph:
         which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
         return which_rows_to_keep
 
-class observational_data(DAG):
+
+class inflation_problem(inflated_hypergraph, DAG):
     
     @staticmethod
     def MixedCardinalityBaseConversion(cardinality, string):
         #card = np.array([cardinality[i] ** (len(cardinality) - (i + 1)) for i in range(len(cardinality))])
         card = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(cardinality))))[:-1])
-        str_to_array = np.array([int(i) for i in string])
+        if isinstance(string,str):
+            str_to_array = np.array([int(i) for i in string])
+        else:
+            str_to_array=np.array(string,dtype=np.int64)
         return np.dot(card, str_to_array)
+    
     @staticmethod
-    def ReverseMixedCardinalityBaseConversion(cardinality, num):
+    def ReverseMixedCardinalityBaseConversion(cardinality, num, output='array'):
         n=num
         st=[]
         for i in range(len(cardinality)):
             
             j=len(cardinality)-i-1
+            #print(n,cardinality[j])
             remainder=int(np.remainder(n,cardinality[j]))
             quotient=(n-remainder)/cardinality[j]
-            st.append(remainder)
+            if output=='string':
+                st.append(str(remainder))
+            else:
+                st.append(remainder)
             n=quotient
             if n < 1:
                 break
         st.reverse()
         r=len(cardinality)-len(st)
         if r!=0:
-            s1=[k for k in np.zeros((1,r),np.uint)[0]]
+            if output=='string':
+                s1=[str(k) for k in np.zeros((1,r),np.uint)[0]]
+            else:
+                s1=[k for k in np.zeros((1,r),np.uint)[0]]
             s1.extend(st)
             st=s1
-        return np.array(st)     
-    
-    def __init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities, rawdata):
-        DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
-        self.knowable_original_probabilities=self.knowable_original_probabilities[0]#Change this!
-        self.outcome_cardinalities_array = np.array(self.outcomes_cardinalities)
-        self.setting_cardinalities_array = np.array(self.setting_cardinalities)
-        self.combined_card_product = np.prod(np.array(self.all_moments_shape))
-        self.outcome_card_product = np.prod(self.outcome_cardinalities_array)
-        self.settings=[''.join(str(setting) for setting in self.ReverseMixedCardinalityBaseConversion(list(self.all_moments_shape), num)[self.outcome_card_product:]) for num in self.knowable_original_probabilities]
-        
-        if rawdata == None:  # When only the number of observed variables is specified, but no actual data, we fake it
-            self.data_flat_filtered = np.array([1.0/self.settings.count(setting) for setting in self.settings])
-            #self.data_size = self.data_flat.size
-            self.data_flat=np.zeros(self.combined_card_product,dtype=np.float)
-            np.put(self.data_flat,self.knowable_original_probabilities,self.data_flat)
-            self.data_reshaped=self.data_flat.reshape(self.all_moments_shape)
-        
-        #elif isinstance(rawdata[0],
-         #               str):  # When the input is in the form ['101','100'] for support certification purposes
-          #  self.data_observed_count = len(rawdata[0])
-           # if self.data_observed_count !=len(outcome_cardinalities):
-           #         raise ValueError("Outcome cardinality specification does not match the number of observed variables inferred from the data.")
-           # data = np.zeros(self.original_card_product)
-           # data[list(map(lambda s: self.MixedCardinalityBaseConversion(self.outcome_cardinalities_array , s), rawdata))] = 1 / numevents
-           # self.data_flat = data
-           # self.data_size = self.data_flat.size
-        
+        if output=='string':
+            return ''.join(st)
         else:
-            self.data_flat_filtered = np.array(rawdata,dtype=np.float)
-            #self.data_size = self.data_flat.size
-            normalization_check = np.array([self.data_flat[np.where(self.settings==setting)[0]].sum() for setting in self.settings])
-            self.data_flat_filtered=np.divide(self.data_flat_filtered,normalization_check)
-            self.data_flat=np.zeros(self.combined_card_product,dtype=np.float)
-            np.put(self.data_flat,self.knowable_original_probabilities,self.data_flat)
-            self.data_reshaped=self.data_flat.reshape(self.all_moments_shape)
-
-class inflation_problem(inflated_hypergraph, observational_data):
+            return np.array(st)     
 
     def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
-                 private_setting_cardinalities, rawdata = None):
+                 private_setting_cardinalities):
         
-        observational_data.__init__(self,hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities, rawdata)
         inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
+        DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
         
         
         self.packed_cardinalities = [outcome_cardinalities[observable] ** self.setting_cardinalities[observable] for
@@ -305,13 +283,73 @@ class inflation_problem(inflated_hypergraph, observational_data):
         eset.columns_to_rows = encoding_of_columns_to_monomials
         # return encoding_of_columns_to_monomials
 
-    def generate_numeric_b_block(self, eset):
-            marginals = (np.einsum(self.data_reshaped[tuple([Ellipsis]+list(eset.settings_of[sub_eset_index]))], np.arange(self.observed_count), np.array(eset.original_indicies[sub_eset_index])) for sub_eset_index in range(len(eset.original_indicies)))
+    def generate_symbolic_b_block(self,eset):
+        eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indicies[eset.flat_form]]
+        size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
+        sym_b=[]
+        for row in (eset.which_rows_to_keep[np.flatnonzero(eset.which_rows_to_keep)]-1):
+            eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
+            product=''
+            for part_index in range(len(eset.partitioned_tuple_form)):
+                part_outcomes=eset_outcomes[:size_of_each_part[part_index]]
+                part_settings=eset.settings_of[part_index]
+                assignment_string=''.join(str(int(e)) for e in list(part_outcomes))+'|'+''.join(str(e) for e in list(part_settings))
+                if size_of_each_part[part_index]<self.observed_count:
+                    part_original_indices=eset.original_indicies[part_index]
+                    marginal_of=''.join([chr(65+i) for i in part_original_indices])
+                    string='P['+marginal_of+']('+assignment_string+')'
+                else:
+                    string='P('+assignment_string+')'
+                product=product+string
+            sym_b.append(product)
+        eset.symbolic_b_block=np.array(sym_b)
 
-            einsumargs = list(itertools.chain.from_iterable(zip(marginals,[np.array(elem) for elem in eset.partitioned_tuple_form])))
-            einsumargs.append(eset.flat_form)
-            b_block = np.einsum(*einsumargs)
-            eset.numeric_b_block = np.take(b_block,eset.which_rows_to_keep)
+    def generate_numeric_b_block(self, eset,rawdata):
+        size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
+        loc_of_each_part=np.add.accumulate(np.array([0]+size_of_each_part))
+        num_b=[]
+        #print(eset.which_rows_to_keep)
+        for row in eset.which_rows_to_keep:
+            eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
+            #print(eset_outcomes)
+            product=1
+            for part_index in range(len(eset.partitioned_tuple_form)):
+                part_outcomes=eset_outcomes[loc_of_each_part[part_index]:loc_of_each_part[part_index+1]]
+                #print(part_outcomes)
+                #print(eset.settings_of)
+                part_settings=eset.settings_of[part_index]
+                #print(part_settings)
+                if size_of_each_part[part_index]<self.observed_count:
+                    part_original_indices=eset.original_indicies[part_index]
+                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
+                    probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_outcomes)+list(part_settings)))[0]]
+                    marginal=probs_to_be_summed.sum()
+                    """
+                    part_original_indices=eset.original_indicies[part_index]
+                    
+                    filled_data=np.zeros(np.prod(np.array(self.all_moments_shape)),dtype=np.float)
+                    np.put(filled_data,self.knowable_original_probabilities,rawdata)
+                    data_reshaped=filled_data.reshape(self.all_moments_shape)
+                    
+                    marginalised_indecies_ellipsis=np.full(self.observed_count,Ellipsis)
+                    np.put(marginalised_indecies_ellipsis,np.array(part_original_indices),part_outcomes)
+                    
+                    marginal=data_reshaped[tuple(list(marginalised_indecies_ellipsis)+list(part_settings))].sum()
+                    """
+                    
+                else:
+                    #print(self.knowable_original_probabilities)
+                    #print(np.array(list(part_settings)+list(part_outcomes)))
+                    #print(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes))))
+                    print(np.where(self.knowable_original_probabilities==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0])
+                    #print(len(rawdata))
+                    marginal=rawdata[np.where(np.array(self.knowable_original_probabilities).ravel()==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0]]
+                    #print(marginal,'------')
+                product=product*marginal
+                #print(marginal,'-------')
+            num_b.append(product)
+        
+        eset.numeric_b_block = np.array(num_b)
 
     class expressible_set:
         def __init__(self, partitioned_eset):
@@ -333,7 +371,8 @@ class inflation_problem(inflated_hypergraph, observational_data):
             self.eset_unpacking_rows_to_keep(eset)
             self.eset_discarded_rows_to_trash(eset)
             self.columns_to_unique_rows(eset)
-            self.generate_numeric_b_block(eset)
+            self.generate_symbolic_b_block(eset)
+            #print(eset.symbolic_b_block)
             # setting offsets
             offset_array = np.zeros(len(eset.discarded_rows_to_trash_no_offsets), dtype=np.int)
             offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)] = offset
@@ -356,9 +395,9 @@ class inflation_problem(inflated_hypergraph, observational_data):
         InfMat = SparseMatrixFromRowsPerColumn(self.AMatrix)
         return InfMat
     
-    @cached_property
-    def b_vector(self):
-        return np.hstack([eset.numeric_b_block for eset in self.expressible_sets])
+    #@cached_property
+    #def b_vector(self):
+    #   return np.hstack([eset.numeric_b_block for eset in self.expressible_sets])
 
 if __name__ == '__main__':
     hypergraph = np.array([[1, 1, 0], [0, 1, 1]])
@@ -373,6 +412,8 @@ if __name__ == '__main__':
                             private_setting_cardinalities)
     # print(e.AMatrix())
     print(inf.inflation_matrix.shape)
-    print(inf.b_vector.shape)
+    rawdata=np.arange(len(inf.knowable_original_probabilities),dtype=np.float)
+    print(np.hstack([inf.generate_numeric_b_block(eset,rawdata) for eset in inf.expressible_sets]))
+    #print(inf.b_vector.shape)
     # print(inf.expressible_sets[3].discarded_rows_to_trash)
     # print(inf.expressible_sets[3].offset_array)
