@@ -46,6 +46,7 @@ class DAG(Network):
                                         zip(private_setting_cardinalities, self.extra_setting_cardinalities)]
         Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
         self.knowable_moments_shape = private_setting_cardinalities + self.outcomes_cardinalities
+        self.private_setting_cardinalities = private_setting_cardinalities
 
     @cached_property
     def form_finder(self):
@@ -72,8 +73,8 @@ class DAG(Network):
 
     @cached_property
     def knowable_original_probabilities(self):
-        mixed_radix_array = np.take(list(np.ndindex(transformed_problem.knowable_moments_shape)),
-                                    transformed_problem.form_finder,
+        mixed_radix_array = np.take(list(np.ndindex(self.knowable_moments_shape)),
+                                    self.form_finder,
                                     axis=1)
         cardinality_converter = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(self.form_finder_shape))))[:-1])
         return np.dot(mixed_radix_array, cardinality_converter)

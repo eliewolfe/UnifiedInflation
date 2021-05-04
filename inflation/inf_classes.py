@@ -200,17 +200,11 @@ class inflation_problem(inflated_hypergraph, DAG):
     def valid_outcomes(self, eset_part_candidate):
         return np.fromiter(self._valid_outcomes(eset_part_candidate), np.bool)
 
+
     def eset_unpacking_rows_to_keep(self, eset):
-        validoutcomes = [self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
-
-        v = validoutcomes[-1]
-        for i in range(len(validoutcomes) - 1):
-            v = np.kron(validoutcomes[len(validoutcomes) - 1 - i], v)
-
-        eset_kept_rows = np.flatnonzero(v.astype(np.int))
-
-        eset.unpacking_rows_to_keep = eset_kept_rows
-        # return eset_kept_rows
+        valid_outcomes_per_partition = [self.valid_outcomes(part) for part in eset.partitioned_tuple_form]
+        valid_outcomes_over_all_partitions = functools.reduce(np.kron, valid_outcomes_per_partition)
+        eset.unpacking_rows_to_keep = np.flatnonzero(valid_outcomes_over_all_partitions.astype(np.int))
 
     def eset_discarded_rows_to_trash(self, eset):
         which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
