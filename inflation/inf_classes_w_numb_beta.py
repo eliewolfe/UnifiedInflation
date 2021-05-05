@@ -135,6 +135,7 @@ class inflation_problem(inflated_hypergraph, DAG):
             str_to_array = np.array([int(i) for i in string])
         else:
             str_to_array=np.array(string,dtype=np.int64)
+            #print(card,str_to_array)
         return np.dot(card, str_to_array)
     
     @staticmethod
@@ -215,12 +216,12 @@ class inflation_problem(inflated_hypergraph, DAG):
         self.shaped_unpacked_column_integers = np.arange(self.column_count).reshape(
             self.inflated_unpacked_cardinalities_tuple)
 
-        # print(self.packed_partitioned_eset)
+        #print(self.packed_partitioned_eset)
         self.partitioned_unpacked_eset_candidates = [list(itertools.product(*list(self.unpacked_conf_integers[part])))
                                                      for part in self.packed_partitioned_eset]
-        # print(self.partitioned_unpacked_eset_candidates)
+        #print(self.partitioned_unpacked_eset_candidates)
         self.partitioned_unpacked_esets = list(itertools.product(*self.partitioned_unpacked_eset_candidates))
-        # print(self.partitioned_unpacked_esets)
+        #print(self.partitioned_unpacked_esets)
         self.flat_unpacked_esets = [[elem for part in eset for elem in part] for eset in
                                     self.partitioned_unpacked_esets]
         # print(self.flat_unpacked_esets)
@@ -315,6 +316,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         num_b=[]
         #print(eset.which_rows_to_keep)
         #print(eset.settings_of)
+        #print(eset.partitioned_tuple_form)
         for row in eset.which_rows_to_keep:
             eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
             #print(eset_outcomes)
@@ -329,7 +331,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                 if size_of_each_part[part_index]<self.observed_count:
                     part_original_indices=eset.original_indicies[part_index]
                     relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
-                    probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_outcomes)+list(part_settings)))[0]]
+                    probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_settings)+list(part_outcomes)))[0]]
                     marginal=probs_to_be_summed.sum()
                     """
                     part_original_indices=eset.original_indicies[part_index]
@@ -348,13 +350,14 @@ class inflation_problem(inflated_hypergraph, DAG):
                     #print(self.knowable_original_probabilities)
                     #print(np.array(list(part_settings)+list(part_outcomes)))
                     #print(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes))))
-                    print(np.where(self.knowable_original_probabilities==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0])
+                    #print(np.where(self.knowable_original_probabilities==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0])
                     #print(len(rawdata))
-                    marginal=rawdata[np.where(np.array(self.knowable_original_probabilities).ravel()==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0]]
+                    marginal=rawdata[np.where(np.array(self.knowable_original_probabilities).ravel()==int(self.MixedCardinalityBaseConversion(self.all_moments_shape, np.array(list(part_settings)+list(part_outcomes)))))[0]][0]
                     #print(marginal,'------')
                 product=product*marginal
-                #print(marginal,'-------')
+                #print(product,'-------')
             num_b.append(product)
+            #print(num_b)
         
         eset.numeric_b_block = np.array(num_b)
 
@@ -412,7 +415,7 @@ if __name__ == '__main__':
     outcome_cardinalities = (2, 2, 2)
     private_setting_cardinalities = (2, 1, 1)
 
-    inflation_orders = [2, 2]
+    inflation_orders = [2, 1]
     p = ((0, 4, 12), (2, 10, 14))
     # e=expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     inf = inflation_problem(hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
@@ -420,7 +423,8 @@ if __name__ == '__main__':
     # print(e.AMatrix())
     print(inf.inflation_matrix.shape)
     rawdata=np.arange(len(inf.knowable_original_probabilities),dtype=np.float)
-    print(np.hstack([inf.generate_numeric_b_block(eset,rawdata) for eset in inf.expressible_sets]))
+    [inf.generate_numeric_b_block(eset,rawdata) for eset in inf.expressible_sets]
+    print(np.hstack([eset.numeric_b_block for eset in inf.expressible_sets]).shape)
     #print(inf.b_vector.shape)
     # print(inf.expressible_sets[3].discarded_rows_to_trash)
     # print(inf.expressible_sets[3].offset_array)
