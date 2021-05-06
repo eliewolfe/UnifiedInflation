@@ -1,5 +1,6 @@
 # Byte-compiled / optimized / DLL files
 __pycache__/
+test/__pycache__/
 *.py[cod]
 *$py.class
 
@@ -130,3 +131,10 @@ dmypy.json
 
 # PyCharm IDE project files
 .idea/
+
+# quantum inflation
+*.dat-s
+*.mat
+*.pkl
+examples/monomials.txt
+.vscode
