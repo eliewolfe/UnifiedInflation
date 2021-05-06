@@ -293,7 +293,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indicies[eset.flat_form]]
         size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
         sym_b=[]
-        for row in (eset.which_rows_to_keep[np.flatnonzero(eset.which_rows_to_keep)]-1):
+        for row in eset.which_rows_to_keep:
             eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
             product=''
             for part_index in range(len(eset.partitioned_tuple_form)):
@@ -405,9 +405,9 @@ class inflation_problem(inflated_hypergraph, DAG):
         InfMat = SparseMatrixFromRowsPerColumn(self.AMatrix)
         return InfMat
     
-    #@cached_property
-    #def b_vector(self):
-    #   return np.hstack([eset.numeric_b_block for eset in self.expressible_sets])
+    @cached_property
+    def symbolic_b(self):
+       return np.hstack([eset.symbolic_b_block for eset in self.expressible_sets])
 
 if __name__ == '__main__':
     hypergraph = np.array([[1, 1, 0], [0, 1, 1]])
@@ -424,6 +424,7 @@ if __name__ == '__main__':
     print(inf.inflation_matrix.shape)
     rawdata=np.arange(len(inf.knowable_original_probabilities),dtype=np.float)
     [inf.generate_numeric_b_block(eset,rawdata) for eset in inf.expressible_sets]
+    print(inf.symbolic_b)
     print(np.hstack([eset.numeric_b_block for eset in inf.expressible_sets]).shape)
     #print(inf.b_vector.shape)
     # print(inf.expressible_sets[3].discarded_rows_to_trash)
