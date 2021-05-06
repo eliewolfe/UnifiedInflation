@@ -330,7 +330,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                 #print(part_settings)
                 if size_of_each_part[part_index]<self.observed_count:
                     part_original_indices=eset.original_indicies[part_index]
-                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
+                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(self.all_moments_shape, dist)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
                     probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_settings)+list(part_outcomes)))[0]]
                     marginal=probs_to_be_summed.sum()
                     """
