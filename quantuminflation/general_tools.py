@@ -1037,7 +1037,7 @@ def substitute_sym_with_numbers(symbolic_variables_to_be_given,
                                 settings_per_party, outcomes_per_party, probability_function, probability_params={}):
     variables_values = symbolic_variables_to_be_given.copy()
     for i in range(len(variables_values)):
-        variables_values[i][1] = substitute_sym_with_value(symbolic_variables_to_be_given[i][1],
+        variables_values[i][1] = float(substitute_sym_with_value(symbolic_variables_to_be_given[i][1],
                                                            settings_per_party,
-                                                           outcomes_per_party, probability_function, probability_params)
+                                                           outcomes_per_party, probability_function, probability_params))
     return variables_values

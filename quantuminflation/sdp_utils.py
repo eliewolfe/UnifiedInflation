@@ -1,16 +1,75 @@
 from typing import Tuple
 
 import numpy as np
-import picos
+#import picos
 from scipy.io import loadmat
+import cvxpy as cp
+import scipy.sparse
+import gc
 
-import picos
-
-def solveSDP(filename_SDP_info: str, use_semiknown: bool = True, verbosity: int = 0, solver: str = 'cvxopt') -> Tuple[picos.modeling.solution.Solution, float]:
+def solveSDP(filename_SDP_info: str, use_semiknown: bool = True, verbosity: int = 0):
     """
     Solves an SDP and returns the solution object and the optimum objective. Takes as input the filename for a .mat file
     with the different variables that are needed.
     """
+
+    ### Faster CVXPY implementation
+   
+    SDP_data = loadmat(filename_SDP_info)
+    positionsmatrix = SDP_data['G'] - 1  # Offset index to Python convention (== counting from 0, not 1)
+    known_vars_array = SDP_data['known_moments'][0]
+    semiknown_vars_array = SDP_data['propto']  # Index in MATLAB convention!
+    semiknown_vars_array[:, [0,2]] += -1  # Offset the frist and second column index to Python convention
+
+    use_semiknown = False
+
+    nr_variables = np.max(positionsmatrix) + 1  # Because it starts counting from 0
+    nr_unknown = nr_variables - len(known_vars_array)
+    nr_known = len(known_vars_array)
+
+    F0 = scipy.sparse.lil_matrix(positionsmatrix.shape)
+    for variable in range(nr_known):
+        F0[np.where(positionsmatrix == variable)] = known_vars_array[variable]
+
+    Fi = []
+    for var in range(nr_known, nr_variables):
+        F = scipy.sparse.lil_matrix(positionsmatrix.shape)
+        F[np.where(positionsmatrix == var)] = 1
+        Fi.append(F)
+
+    x = cp.Variable(nr_unknown)
+
+    G = F0
+    for i in range(len(Fi)):
+        G = G + x[i] * Fi[i]
+
+    Id = cp.diag(np.ones(positionsmatrix.shape[0]))
+    lam = cp.Variable()
+
+    constraints = [ G - lam*Id >> 0]
+
+    if use_semiknown:
+        for var1, const, var2 in semiknown_vars_array:
+            constraints += [ x[var1-nr_known] == const * x[var2-nr_known] ]
+
+    prob = cp.Problem(cp.Maximize(lam), constraints)
+
+    ### TODO: Is it actually a good idea to use del and garbage collector? It might be useless...
+    del SDP_data, positionsmatrix, known_vars_array, semiknown_vars_array, Id, F0, Fi[:], Fi
+    gc.collect()
+
+    prob.solve(solver=cp.MOSEK, verbose=verbosity)
+
+    # TODO: Get dual certificate in symbolic form
+
+    #print("A solution X is", G.value)
+    #print("Lambda=", lam.value)
+    vars_of_interest = {'sol': prob.solution, 'G': G.value, 'duals': constraints[0].dual_value}
+    return vars_of_interest, lam.value
+    
+
+    '''    
+    OLD PICOS SLOW IMPLEMENTATION
     SDP_data = loadmat(filename_SDP_info)
     positionsmatrix = SDP_data['G']
     nr_variables = np.max(positionsmatrix)  # We need to do this before offsetting the MATLAB index
@@ -89,6 +148,11 @@ def solveSDP(filename_SDP_info: str, use_semiknown: bool = True, verbosity: int 
 
     P.set_objective("max", lam)
 
-    sol = P.solve(solver=solver, verbosity=verbosity)
+    print(P)
+    print(P.options)
+
+    sol = P.solve(solver=solver, verbosity=verbosity, dualize=False)
 
     return sol, lam.value
+    '''
+

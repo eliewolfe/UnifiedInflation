@@ -2,12 +2,17 @@ import unittest
 
 # from sdp_utils import solveSDP
 from quantuminflation.general_tools import *
+from quantuminflation.sdp_utils import *
+import quantuminflation.useful_distributions as useful_distributions
+
+from scipy.io import loadmat
 
 """ THIS IS MISSING data/ DOES NOT WORK """
 
 # Commented out because it takes long to test
-'''
+
 class TestSDPOutput(unittest.TestCase):
+    '''
     def test_GHZ_known_semiknown(self):
         """
         Comparing with what I get when solving the SDP in MATLAB up to 4 decimal places.
@@ -29,9 +34,9 @@ class TestSDPOutput(unittest.TestCase):
         generate_sdp_relaxation(settings_per_party, outcomes_per_party, hypergraph,
                                 inflation_level_per_source, expectation_values, col_structure,
                                 verbose=1.0, filename_label='', calculate_semiknowns=True)
-        final_positions_matrix, known_moments, semiknown_moments = \
-                                    get_relaxation_constraints(settings_per_party, outcomes_per_party, hypergraph,
-                                       inflation_level_per_source, probability_function, prob_param, filename_label=filename_label)
+        final_positions_matrix, known_moments, semiknown_moments, symbolic_variables_to_be_given, variable_dict \
+        = helper_extract_constraints(settings_per_party, outcomes_per_party, hypergraph, inflation_level_per_source,
+                                     probability_function, prob_param, filename_label='')
         #sol, lambdaval = solveSDP('inflationMATLAB_.mat', use_semiknown=True)
         #lambdaval = out[1]
 
@@ -48,7 +53,9 @@ class TestSDPOutput(unittest.TestCase):
         sol, lambdaval = solveSDP('inflationMATLAB_.mat', use_semiknown=False, verbosity=0)
         print("lambda=", lambdaval, "assert compares to", -0.1755, "to 4 decimal places.")
         assert abs(lambdaval - -0.1755) < 1e-4  # For refernce, in MATLAB it is -0.175523
+    '''
 
+    '''
     def test_GHZ_inf3(self):
         """
         Takes too long to solve the SDP. We will generate the SDP knowing that the result of the maximization of
@@ -73,9 +80,11 @@ class TestSDPOutput(unittest.TestCase):
         generate_sdp_relaxation(settings_per_party, outcomes_per_party, hypergraph,
                                 inflation_level_per_source, expectation_values, col_structure,
                                 verbose=1.0, filename_label='', calculate_semiknowns=True)
-        test_final_positions_matrix, test_known_moments, test_semiknown_moments = \
-            get_relaxation_constraints(settings_per_party, outcomes_per_party, hypergraph,
-                                       inflation_level_per_source, probability_function, prob_param, filename_label=filename_label)
+
+        test_final_positions_matrix, test_known_moments, test_semiknown_moments, symbolic_variables_to_be_given, variable_dict \
+        = helper_extract_constraints(settings_per_party, outcomes_per_party, hypergraph, inflation_level_per_source,
+                                     probability_function, prob_param, filename_label='')
+
 
         # Import correct ones
         correct_final_positions_matrix = loadmat("test/test_data/inf3_out222_local1_P_GHZ_v0429/inflationMomentMat.mat")['G']
@@ -85,7 +94,8 @@ class TestSDPOutput(unittest.TestCase):
         assert np.allclose(test_final_positions_matrix, correct_final_positions_matrix), "Not the same as the reference."
         assert np.allclose(test_known_moments, correct_known_moments), "Not the same as the reference."
         assert np.allclose(test_semiknown_moments, correct_semiknown_moments), "Not the same as the reference."
-
+    '''
+    '''
     def test_W_inf2(self):
         """
         Takes too long to solve the SDP. We will generate the SDP knowing that the result of the maximization of
@@ -118,9 +128,9 @@ class TestSDPOutput(unittest.TestCase):
         generate_sdp_relaxation(settings_per_party, outcomes_per_party, hypergraph,
                                 inflation_level_per_source, expectation_values, col_structure,
                                 verbose=1.0, filename_label='', calculate_semiknowns=True)
-        test_final_positions_matrix, test_known_moments, test_semiknown_moments = \
-            get_relaxation_constraints(settings_per_party, outcomes_per_party, hypergraph,
-                                       inflation_level_per_source, probability_function, prob_param, filename_label=filename_label)
+        test_final_positions_matrix, test_known_moments, test_semiknown_moments, symbolic_variables_to_be_given, variable_dict \
+        = helper_extract_constraints(settings_per_party, outcomes_per_party, hypergraph, inflation_level_per_source,
+                                     probability_function, prob_param, filename_label='')
 
         # Import correct ones
         correct_final_positions_matrix = loadmat("test/test_data/inf2_out222_local2_star_P_W_v081/inflationMomentMat.mat")['G']
@@ -130,8 +140,9 @@ class TestSDPOutput(unittest.TestCase):
         assert np.allclose(test_final_positions_matrix, correct_final_positions_matrix), "Not the same as the reference."
         assert np.allclose(test_known_moments, correct_known_moments), "Not the same as the reference."
         assert np.allclose(test_semiknown_moments, correct_semiknown_moments), "Not the same as the reference."
+    '''
 
-
+    '''
     def test_Mermin_inf2(self):
         """
         Takes too long to solve the SDP. We will generate the SDP knowing that the result of the maximization of
@@ -161,9 +172,9 @@ class TestSDPOutput(unittest.TestCase):
         generate_sdp_relaxation(settings_per_party, outcomes_per_party, hypergraph,
                                 inflation_level_per_source, expectation_values, col_structure,
                                 verbose=1.0, filename_label='', calculate_semiknowns=True)
-        test_final_positions_matrix, test_known_moments, test_semiknown_moments = \
-            get_relaxation_constraints(settings_per_party, outcomes_per_party, hypergraph,
-                                       inflation_level_per_source, probability_function, prob_param, filename_label=filename_label)
+        test_final_positions_matrix, test_known_moments, test_semiknown_moments, symbolic_variables_to_be_given, variable_dict \
+        = helper_extract_constraints(settings_per_party, outcomes_per_party, hypergraph, inflation_level_per_source,
+                                     probability_function, prob_param, filename_label='')
 
         # Import correct ones
         correct_final_positions_matrix = loadmat("test/test_data/inf3_out222_in222_local1_S2_P_mermin_v051/inflationMomentMat.mat")['G']
@@ -173,8 +184,9 @@ class TestSDPOutput(unittest.TestCase):
         assert np.allclose(test_final_positions_matrix, correct_final_positions_matrix), "Not the same as the reference."
         assert np.allclose(test_known_moments, correct_known_moments), "Not the same as the reference."
         assert np.allclose(test_semiknown_moments, correct_semiknown_moments), "Not the same as the reference."
+    '''
 
-
+    
     def test_Salman_u2_085(self):
         """
         Takes too long to solve the SDP. We will generate the SDP knowing that the result of the maximization of
@@ -198,15 +210,15 @@ class TestSDPOutput(unittest.TestCase):
         # local leve 2 star: only up to products of 4 terms
         # Union of S2 and Local 1
         col_structure = [[], [0], [1], [2], [0, 1], [0, 2], [1, 2], [0, 1, 2]]
-        probability_function = P_Salman
+        probability_function = useful_distributions.P_Salman
         prob_param = 0.85  # u2 param
         filename_label = 'GHZ_inf3'
         generate_sdp_relaxation(settings_per_party, outcomes_per_party, hypergraph,
                                 inflation_level_per_source, expectation_values, col_structure,
                                 verbose=1.0, filename_label='', calculate_semiknowns=True)
-        test_final_positions_matrix, test_known_moments, test_semiknown_moments = \
-            get_relaxation_constraints(settings_per_party, outcomes_per_party, hypergraph,
-                                       inflation_level_per_source, probability_function, prob_param, filename_label='')
+        test_final_positions_matrix, test_known_moments, test_semiknown_moments, symbolic_variables_to_be_given, variable_dict \
+        = helper_extract_constraints(settings_per_party, outcomes_per_party, hypergraph, inflation_level_per_source,
+                                     probability_function, prob_param, filename_label='')
 
         # Import correct ones
         correct_final_positions_matrix = \
@@ -220,5 +232,4 @@ class TestSDPOutput(unittest.TestCase):
                            correct_final_positions_matrix), "Not the same as the reference."
         assert np.allclose(test_known_moments, correct_known_moments), "Not the same as the reference."
         assert np.allclose(test_semiknown_moments, correct_semiknown_moments), "Not the same as the reference."
-
-'''
+    
