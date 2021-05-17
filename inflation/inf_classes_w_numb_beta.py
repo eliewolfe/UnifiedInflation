@@ -292,12 +292,13 @@ class inflation_problem(inflated_hypergraph, DAG):
     def generate_symbolic_b_block(self,eset):
         eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indicies[eset.flat_form]]
         size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
+        loc_of_each_part=np.add.accumulate(np.array([0]+size_of_each_part))
         sym_b=[]
         for row in eset.which_rows_to_keep:
             eset_outcomes=self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)
             product=''
             for part_index in range(len(eset.partitioned_tuple_form)):
-                part_outcomes=eset_outcomes[:size_of_each_part[part_index]]
+                part_outcomes=eset_outcomes[loc_of_each_part[part_index]:loc_of_each_part[part_index+1]]
                 part_settings=eset.settings_of[part_index]
                 assignment_string=''.join(str(int(e)) for e in list(part_outcomes))+'|'+''.join(str(e) for e in list(part_settings))
                 if size_of_each_part[part_index]<self.observed_count:
@@ -322,7 +323,7 @@ class inflation_problem(inflated_hypergraph, DAG):
             #print(eset_outcomes)
             product=1
             #for part_index in range(len(eset.partitioned_tuple_form)):
-            for part_index in [0]:
+            for part_index in range(len(eset.partitioned_tuple_form)):
                 part_outcomes=eset_outcomes[loc_of_each_part[part_index]:loc_of_each_part[part_index+1]]
                 #print(part_outcomes)
                 #print(eset.settings_of)
@@ -330,7 +331,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                 #print(part_settings)
                 if size_of_each_part[part_index]<self.observed_count:
                     part_original_indices=eset.original_indicies[part_index]
-                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(eset.cardinalities, row)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
+                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(self.all_moments_shape, dist)[list(part_original_indices)+list(np.array(part_original_indices)+size_of_each_part[part_index])]) for dist in self.knowable_original_probabilities]
                     probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_settings)+list(part_outcomes)))[0]]
                     marginal=probs_to_be_summed.sum()
                     """
