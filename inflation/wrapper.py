@@ -48,6 +48,14 @@ class DAG(Network):
         self.knowable_moments_shape = private_setting_cardinalities + self.outcomes_cardinalities
         self.private_setting_cardinalities = private_setting_cardinalities
 
+    def ancestral_closed_Q(self, variables_subset):
+        """
+        :param variables_subset: list of indices of observable variables
+        :return: True iff the subset is ancestrally closed.
+        """
+        parents_of_subset= np.flatnonzero(np.sum(np.asarray(directed_structure)[:,variables_subset], axis=1))
+        return set(parents_of_subset).issubset(variables_subset)
+
     @cached_property
     def form_finder(self):
         private_setting_indices = np.arange(self.num_observed_vars)
@@ -115,6 +123,8 @@ if __name__ == '__main__':
     #print(transformed_problem.form_finder_shape)
     print(transformed_problem.knowable_original_probabilities)
     print(transformed_problem.knowable_original_probabilities_old)
+    print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)
+        if transformed_problem.ancestral_closed_Q(pair)])
 
 
 
