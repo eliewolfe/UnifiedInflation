@@ -6,7 +6,7 @@ Utility functions.
 
 from __future__ import absolute_import
 import numpy as np
-from numba import njit
+# from numba import njit
 from scipy.sparse import coo_matrix
 
 
@@ -15,18 +15,18 @@ def Deduplicate(
     (vals, idx) = np.unique(ar, return_index=True)
     return vals[np.argsort(idx)]
 
-
-@njit
+#
+# @njit
 def MoveToFront(num_var, ar):
     return np.hstack((ar, np.delete(np.arange(num_var), ar)))
 
-
-@njit
+#
+# @njit
 def MoveToBack(num_var, ar):
     return np.hstack((np.delete(np.arange(num_var), ar), ar))
 
-
-@njit
+#
+# @njit
 def GenShapedColumnIntegers(range_shape):
     return np.arange(0, np.prod(np.array(range_shape)), 1, np.int32).reshape(range_shape)
     #return np.arange(np.array(range_shape).prod()).reshape(range_shape)
@@ -42,8 +42,8 @@ def PositionIndex(arraywithduplicates):
     # u,inv,idx=np.unique(arraywithduplicates,return_inverse=True)[1]
     return np.unique(arraywithduplicates, return_inverse=True)[1]
 
-
-@njit
+#
+# @njit
 def reindex_list(ar):
     seenbefore = np.full(np.max(ar) + 1, -1)
     newlist = np.empty(len(ar), np.uint)
