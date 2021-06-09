@@ -56,7 +56,7 @@ class inflated_hypergraph:
         self.packed_partitioned_eset = [np.compress(np.add(part, 1).astype(np.bool), part)
                                         for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
         self.packed_partitioned_eset_tuple = tuple([tuple(i) for i in self.packed_partitioned_eset])
-        print(self.packed_partitioned_eset_tuple)
+        #print(self.packed_partitioned_eset_tuple)
 
     @cached_property
     def inflation_group_generators(self):
@@ -181,40 +181,24 @@ class inflation_problem(inflated_hypergraph, DAG):
                                                     np.array(self.inflation_copies))
         self.knowable_margins=[self.original_conf_var_indicies[part] for part in self.packed_partitioned_eset if self.ancestral_closed_Q(self.original_conf_var_indicies[part])]
         ravelled_knowable_margins=[i for j in self.knowable_margins for i in j]
-        #copy_count=[np.array(np.array(inflation_orders)[np.array(self.root_structure[var])]).prod() for var in range(self.observed_count)]
-        copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
         
-        new_inflation_copies=self.inflation_copies
-        new_inflation_orders=inflation_orders
-        #reducable_latent_roots=[0]      
-        while True:
-            non_matching_copy_vars=np.flatnonzero(np.not_equal(copy_count,new_inflation_copies,dtype=np.int))
-            matching_copy_vars=np.delete(np.arange(self.observed_count),non_matching_copy_vars)
-            matching_copy_roots=np.array(list(set([i for j in np.array(self.root_structure,dtype=np.object)[matching_copy_vars] for i in j])))
-            non_matching_copy_roots=np.array([np.array(j) for j in np.array(self.root_structure,dtype=np.object)[non_matching_copy_vars]],dtype=np.object)
-            
-            
-            reducable_latent_roots=[np.setdiff1d(roots,matching_copy_roots) for roots in non_matching_copy_roots]
-            if not reducable_latent_roots:
-                break
-            sorted_latent_roots_to_reduce=np.bincount(np.array([i for j in reducable_latent_roots for i in j]))
-            latent_root_to_reduce=np.argsort(sorted_latent_roots_to_reduce)[-1]
-            vars_to_reduce_num_of_copies_of=np.array([non_matching_copy_vars[i] for i in range(len(non_matching_copy_vars)) if any(non_matching_copy_roots[i]==latent_root_to_reduce)])
-            magnitude_of_reduction=np.amin(np.divide(new_inflation_copies[vars_to_reduce_num_of_copies_of],copy_count[vars_to_reduce_num_of_copies_of]).astype(np.int))
-            new_inflation_orders=np.array(new_inflation_orders)
-            
-            if np.remainder(new_inflation_orders[latent_root_to_reduce],magnitude_of_reduction)==0:
-                new_inflation_orders[latent_root_to_reduce]=new_inflation_orders[latent_root_to_reduce]/magnitude_of_reduction
-            
-            _latent_ancestors_of = [new_inflation_orders.take(np.nonzero(hypergraph[:, observable])[0]) for
-                                         observable in range(self.observed_count)]
-            new_inflation_copies = np.fromiter(map(np.prod, _latent_ancestors_of), np.int)
+        packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
+        original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
+        #copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
         
-        print('Inflation orders too large, switching to optimized inflation orders:',new_inflation_orders)
-        inflation_orders=new_inflation_orders
-        inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
+        #non_matching_copy_vars=np.flatnonzero(np.not_equal(original_copy_count,copy_count,dtype=np.int))
         
-        print(new_inflation_orders,new_inflation_copies)
+        #print(packed_exp_set_w_original_indices,ravelled_knowable_margins,non_matching_copy_vars)
+        
+        new_inflation_order_candidate=np.multiply(copy_count,hypergraph).max(axis=1)
+        if not np.array_equal(new_inflation_order_candidate, np.array(inflation_orders)):
+            copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
+            inflation_orders=new_inflation_order_candidate
+            inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
+            print('Inflation orders too large, switching to optimized inflation orders:',inflation_orders)
+            
+        
+        
         #print(non_matching_copy_roots)
         #print(reducable_latent_roots)
         #print(matching_copy_roots)
@@ -385,7 +369,10 @@ class inflation_problem(inflated_hypergraph, DAG):
                 part_settings=eset.settings_of[part_index]
                 #print(part_settings)
                 if size_of_each_part[part_index]<self.observed_count:
-                    part_original_indices=eset.original_indicies[part_index]
+                    part_original_indices=np.array(eset.original_indicies[part_index])
+                    part_settings_template=np.full(self.observed_count,0)
+                    part_settings_template[part_original_indices]=part_settings
+                    part_settings=part_settings_template
                     relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(self.all_moments_shape, dist)[list(part_original_indices)+list(np.array(part_original_indices)+self.observed_count)]) for dist in self.knowable_original_probabilities]
                     probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_settings)+list(part_outcomes)))[0]]
                     marginal=probs_to_be_summed.sum()
@@ -466,12 +453,14 @@ class inflation_problem(inflated_hypergraph, DAG):
        return np.hstack([eset.symbolic_b_block for eset in self.expressible_sets])
 
 if __name__ == '__main__':
-    hypergraph = np.array([[1, 1, 0], [0, 1, 1],[0,1,0],[0,0,1]])
+    hypergraph = np.array([[1, 1, 0,0], [0, 1, 1,0],[0,0,1,1],])
+    #hypergraph=np.array([[1, 1, 0], [0, 1, 1]])
     directed_structure = np.array([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
-    outcome_cardinalities = (2, 2, 2)
-    private_setting_cardinalities = (2, 1, 1)
+    directed_structure=np.array([[0,1,1,0],[0,0,0,0],[0,0,0,0],[0,0,1,0]])
+    outcome_cardinalities = (2, 2, 2,2)
+    private_setting_cardinalities = (2, 1, 1,1)
 
-    inflation_orders = [2, 2, 2, 2]
+    inflation_orders = [2, 3,3]
     p = ((0, 4, 12), (2, 10, 14))
     # e=expressible_sets(hypergraph,inflation_orders,directed_structure, outcome_cardinalities, private_setting_cardinalities)
     inf = inflation_problem(hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
