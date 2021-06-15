@@ -39,8 +39,8 @@ class inflated_hypergraph:
         self.observed_count = len(hypergraph[0])
         self.root_structure = [list(np.nonzero(hypergraph[:, observable])[0]) for observable in
                                range(self.observed_count)]
-        self.inflations_orders = np.array(inflation_orders)
-        self._latent_ancestors_of = [self.inflations_orders.take(np.nonzero(hypergraph[:, observable])[0]) for
+        self.inflation_orders = np.asarray(inflation_orders)
+        self._latent_ancestors_of = [self.inflation_orders.take(np.nonzero(hypergraph[:, observable])[0]) for
                                      observable in range(self.observed_count)]
         self.inflation_copies = np.fromiter(map(np.prod, self._latent_ancestors_of), np.int)
         self.inflation_depths = np.fromiter(map(len, self._latent_ancestors_of), np.int)
@@ -56,6 +56,9 @@ class inflated_hypergraph:
         self.packed_partitioned_eset = [np.compress(np.add(part, 1).astype(np.bool), part)
                                         for part in itertools.zip_longest(*self._canonical_pos, fillvalue=-1)]
         self.packed_partitioned_eset_tuple = tuple([tuple(i) for i in self.packed_partitioned_eset])
+
+
+
         #print(self.packed_partitioned_eset_tuple)
 
     @cached_property
@@ -66,7 +69,7 @@ class inflated_hypergraph:
         reshapings = np.ones((self.observed_count, self.latent_count), np.uint8)
         contractings = np.zeros((self.observed_count, self.latent_count), np.object)
         for idx, latent_ancestors in enumerate(self.root_structure):
-            reshapings[idx][latent_ancestors] = self.inflations_orders[latent_ancestors]
+            reshapings[idx][latent_ancestors] = self.inflation_orders[latent_ancestors]
             contractings[idx][latent_ancestors] = np.s_[:]
         reshapings = map(tuple, reshapings)
         contractings = map(tuple, contractings)
@@ -75,7 +78,7 @@ class inflated_hypergraph:
         indices_to_extract = np.hstack(tuple(shaped_elem[contraction].ravel() for shaped_elem, contraction in zip(
             np.arange(gloablstrategybroadcast.size).reshape(gloablstrategybroadcast.shape), contractings)))
         group_generators = []
-        for latent_to_explore, inflation_order_for_U in enumerate(self.inflations_orders):
+        for latent_to_explore, inflation_order_for_U in enumerate(self.inflation_orders):
             generator_count_for_U = np.minimum(inflation_order_for_U, 3) - 1
             group_generators_for_U = np.empty((generator_count_for_U, self.inflated_observed_count), np.int)
             # Maybe assert that inflation order must be a strictly positive integer?
@@ -174,44 +177,44 @@ class inflation_problem(inflated_hypergraph, DAG):
                  private_setting_cardinalities):
         
         inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
-        self.directed_structure=directed_structure
+        # self.directed_structure=directed_structure
         DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
         
         self.original_conf_var_indicies = np.repeat(np.arange(self.observed_count),
                                                     np.array(self.inflation_copies))
-        self.knowable_margins=[part for part in self.packed_partitioned_eset_tuple if self.ancestral_closed_Q(self.original_conf_var_indicies[list(part)])]
 
-            
-        problematic_partitions=list(set(self.packed_partitioned_eset_tuple)-set(self.knowable_margins))
-        if problematic_partitions:
-            for problematic_partition in problematic_partitions:
-                for subset_size in range(len(problematic_partition)-1,0,-1):
-                    possible_subsets=itertools.combinations(problematic_partition,subset_size)
-                    for subset in possible_subsets:
-                        is_subset_closed=self.ancestral_closed_Q(self.original_conf_var_indicies[list(subset)])
-                        if is_subset_closed:
-                            break
-                    if is_subset_closed:
-                            break
-                if is_subset_closed: 
-                    self.knowable_margins.append(subset)
+        self.packed_partitioned_eset_deflated = [self.original_conf_var_indicies[part] for part in self.packed_partitioned_eset]
+        self.knowable_margins = [self.extract_ancestral_closed_subset(part) for part in self.packed_partitioned_eset_deflated]
+        ravelled_knowable_margins = list(itertools.chain.from_iterable(self.knowable_margins))
 
-        print(self.knowable_margins)
-        ravelled_knowable_margins=self.original_conf_var_indicies[[i for j in self.knowable_margins for i in j]].tolist()
-        #packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
-        #original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
-        copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
-                
-                   
-                
-                
-        
-        
+        # Elie deprecated this with the simpler code above.
+        # self.knowable_margins=[part for part in self.packed_partitioned_eset_tuple if self.ancestral_closed_Q(self.original_conf_var_indicies[list(part)])]
+        # problematic_partitions=list(set(self.packed_partitioned_eset_tuple)-set(self.knowable_margins))
+        # if problematic_partitions:
+        #     for problematic_partition in problematic_partitions:
+        #         for subset_size in range(len(problematic_partition)-1,0,-1):
+        #             possible_subsets=itertools.combinations(problematic_partition,subset_size)
+        #             for subset in possible_subsets:
+        #                 is_subset_closed=self.ancestral_closed_Q(self.original_conf_var_indicies[list(subset)])
+        #                 if is_subset_closed:
+        #                     break
+        #             if is_subset_closed:
+        #                     break
+        #         if is_subset_closed:
+        #             self.knowable_margins.append(subset)
+        #
+        # print(self.knowable_margins)
+        # ravelled_knowable_margins=self.original_conf_var_indicies[[i for j in self.knowable_margins for i in j]].tolist()
+        # #packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
+        # #original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
+        # copy_count = np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
+
+        copy_count = np.fromiter(ravelled_knowable_margins.count(var) for var in range(self.observed_count), int)
         new_inflation_order_candidate=np.multiply(copy_count,hypergraph).max(axis=1)
-        if not np.array_equal(new_inflation_order_candidate, np.array(inflation_orders)):
-            inflation_orders=new_inflation_order_candidate
-            inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
-            print('Inflation orders too large, switching to optimized inflation orders:',inflation_orders)
+        if not np.array_equal(new_inflation_order_candidate, self.inflation_orders)):
+            #inflation_orders=new_inflation_order_candidate
+            inflated_hypergraph.__init__(self, hypergraph, new_inflation_order_candidate)
+            print('Inflation orders too large, switching to optimized inflation orders:',new_inflation_order_candidate)
         
         
         self.packed_cardinalities = [outcome_cardinalities[observable] ** self.setting_cardinalities[observable] for

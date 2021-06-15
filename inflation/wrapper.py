@@ -66,16 +66,26 @@ class DAG(Network):
             cardinalities_outside_of_subset = np.asarray(self.private_setting_cardinalities)[list(ancestors_outside_subset)]
             return cardinalities_outside_of_subset.max()<=1
 
-    def ancestral_closed_subset_indices(self, variables_set):
-        variables_set_as_array = np.asarray(variables_set)
-        num_variables = len(variables_set)
-        all_set_indices = list(range(num_variables))
-        for subset_size in range(num_variables, -1, -1):
-            possible_subsets = itertools.combinations(all_set_indices, subset_size)
+    # def ancestral_closed_subset_indices(self, variables_set):
+    #     variables_set_as_array = np.asarray(variables_set)
+    #     num_variables = len(variables_set)
+    #     all_set_indices = list(range(num_variables))
+    #     for subset_size in range(num_variables, -1, -1):
+    #         possible_subsets = itertools.combinations(all_set_indices, subset_size)
+    #         for subset in possible_subsets:
+    #             subset_indices = list(subset)
+    #             if self.ancestral_closed_Q(variables_set_as_array[subset_indices]):
+    #                 return subset_indices
+
+    def extract_ancestral_closed_subset(self, variables_set):
+        for subset_size in range(len(variables_set), -1, -1):
+            possible_subsets = itertools.combinations(list(variables_set), subset_size)
             for subset in possible_subsets:
-                subset_indices = list(subset)
-                if self.ancestral_closed_Q(variables_set_as_array[subset_indices]):
-                    return subset_indices
+                subset_as_list = list(subset)
+                if self.ancestral_closed_Q(subset_as_list):
+                    return subset_as_list
+        print('Error extracting an ancestrally closed subset.')
+        return list()
 
 
     @cached_property
@@ -147,7 +157,7 @@ if __name__ == '__main__':
     print(transformed_problem.knowable_original_probabilities_old)
     print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)
         if transformed_problem.ancestral_closed_Q(pair)])
-    print([transformed_problem.ancestral_closed_subset_indices(pair) for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)])
+    print([transformed_problem.extract_ancestral_closed_subset(pair) for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)])
 
 
 
