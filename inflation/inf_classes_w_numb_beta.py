@@ -179,32 +179,39 @@ class inflation_problem(inflated_hypergraph, DAG):
         
         self.original_conf_var_indicies = np.repeat(np.arange(self.observed_count),
                                                     np.array(self.inflation_copies))
-        self.knowable_margins=[self.original_conf_var_indicies[part] for part in self.packed_partitioned_eset if self.ancestral_closed_Q(self.original_conf_var_indicies[part])]
-        ravelled_knowable_margins=[i for j in self.knowable_margins for i in j]
+        self.knowable_margins=[part for part in self.packed_partitioned_eset_tuple if self.ancestral_closed_Q(self.original_conf_var_indicies[list(part)])]
+
+            
+        problematic_partitions=list(set(self.packed_partitioned_eset_tuple)-set(self.knowable_margins))
+        if problematic_partitions:
+            for problematic_partition in problematic_partitions:
+                for subset_size in range(len(problematic_partition)-1,0,-1):
+                    possible_subsets=itertools.combinations(problematic_partition,subset_size)
+                    for subset in possible_subsets:
+                        is_subset_closed=self.ancestral_closed_Q(self.original_conf_var_indicies[list(subset)])
+                        if is_subset_closed:
+                            break
+                    if is_subset_closed:
+                            break
+                if is_subset_closed: 
+                    self.knowable_margins.append(subset)
+
+        print(self.knowable_margins)
+        ravelled_knowable_margins=self.original_conf_var_indicies[[i for j in self.knowable_margins for i in j]].tolist()
+        #packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
+        #original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
+        copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
+                
+                   
+                
+                
         
-        packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
-        original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
-        #copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
-        
-        #non_matching_copy_vars=np.flatnonzero(np.not_equal(original_copy_count,copy_count,dtype=np.int))
-        
-        #print(packed_exp_set_w_original_indices,ravelled_knowable_margins,non_matching_copy_vars)
         
         new_inflation_order_candidate=np.multiply(copy_count,hypergraph).max(axis=1)
         if not np.array_equal(new_inflation_order_candidate, np.array(inflation_orders)):
-            copy_count=np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
             inflation_orders=new_inflation_order_candidate
             inflated_hypergraph.__init__(self, hypergraph, inflation_orders)
             print('Inflation orders too large, switching to optimized inflation orders:',inflation_orders)
-            
-        
-        
-        #print(non_matching_copy_roots)
-        #print(reducable_latent_roots)
-        #print(matching_copy_roots)
-        #print(copy_count)
-        #print(self.inflation_copies)
-        #print(self.relative_copy_count)
         
         
         self.packed_cardinalities = [outcome_cardinalities[observable] ** self.setting_cardinalities[observable] for
@@ -373,7 +380,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                     part_settings_template=np.full(self.observed_count,0)
                     part_settings_template[part_original_indices]=part_settings
                     part_settings=part_settings_template
-                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(self.all_moments_shape, dist)[list(part_original_indices)+list(np.array(part_original_indices)+self.observed_count)]) for dist in self.knowable_original_probabilities]
+                    relevant_sets_and_outs=[''.join(str(e) for e in self.ReverseMixedCardinalityBaseConversion(self.all_moments_shape, dist)[range(self.observed_count)+list(np.array(part_original_indices)+self.observed_count)]) for dist in self.knowable_original_probabilities]
                     probs_to_be_summed=rawdata[np.where(relevant_sets_and_outs==''.join(str(e) for e in list(part_settings)+list(part_outcomes)))[0]]
                     marginal=probs_to_be_summed.sum()
                     """
@@ -453,7 +460,7 @@ class inflation_problem(inflated_hypergraph, DAG):
        return np.hstack([eset.symbolic_b_block for eset in self.expressible_sets])
 
 if __name__ == '__main__':
-    hypergraph = np.array([[1, 1, 0,0], [0, 1, 1,0],[0,0,1,1],])
+    hypergraph = np.array([[1, 1, 0,0], [0, 1, 1,0],[0,0,1,1]])
     #hypergraph=np.array([[1, 1, 0], [0, 1, 1]])
     directed_structure = np.array([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
     directed_structure=np.array([[0,1,1,0],[0,0,0,0],[0,0,0,0],[0,0,1,0]])
