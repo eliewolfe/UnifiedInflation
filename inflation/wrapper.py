@@ -11,6 +11,8 @@ elif hexversion >= 0x3060000:
 else:
     cached_property = property
 
+from internal_functions.adjmat_utils import transitive_closure
+
 # Network is the low level original graph representation. InflationGraph will be built as a subclass of DAG, taking inflation order(s) as a further parameter.
 # DAG is the user-friendly constructor. It is also a subclass of Network, as it constructs an
 
@@ -40,21 +42,41 @@ class DAG(Network):
         Settingless variables should be treated as having setting cardinality = 1.
     """
     def __init__(self, hypergraph_structure, directed_structure, outcome_cardinalities, private_setting_cardinalities):
-        self.inverse_directed_structure = np.transpose(directed_structure)
+        self.directed_structure = directed_structure
+        self.private_setting_cardinalities = private_setting_cardinalities
+        self.inverse_directed_structure = np.transpose(self.directed_structure)
         self.extra_setting_cardinalities = np.multiply(outcome_cardinalities, self.inverse_directed_structure)
         self.shaped_setting_cardinalities = [np.hstack((sett, cards[cards.nonzero()])) for sett, cards in
-                                        zip(private_setting_cardinalities, self.extra_setting_cardinalities)]
+                                        zip(self.private_setting_cardinalities, self.extra_setting_cardinalities)]
         Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
-        self.knowable_moments_shape = private_setting_cardinalities + self.outcomes_cardinalities
-        self.private_setting_cardinalities = private_setting_cardinalities
+        self.knowable_moments_shape = self.private_setting_cardinalities + self.outcomes_cardinalities
+        self.closure = transitive_closure(self.directed_structure)
 
     def ancestral_closed_Q(self, variables_subset):
         """
         :param variables_subset: list of indices of observable variables
         :return: True iff the subset is ancestrally closed.
         """
-        parents_of_subset= np.flatnonzero(np.sum(np.asarray(self.directed_structure)[:,variables_subset], axis=1))
-        return set(parents_of_subset).issubset(variables_subset)
+        #parents_of_subset= np.flatnonzero(np.sum(np.asarray(self.directed_structure)[:,variables_subset], axis=1))
+        ancestors_of_subset= np.flatnonzero(np.sum(np.asarray(self.closure)[:,variables_subset], axis=1))
+        ancestors_outside_subset = set(ancestors_of_subset).difference(variables_subset)
+        if len(ancestors_outside_subset)==0:
+            return True
+        else:
+            cardinalities_outside_of_subset = np.asarray(self.private_setting_cardinalities)[list(ancestors_outside_subset)]
+            return cardinalities_outside_of_subset.max()<=1
+
+    def ancestral_closed_subset_indices(self, variables_set):
+        variables_set_as_array = np.asarray(variables_set)
+        num_variables = len(variables_set)
+        all_set_indices = list(range(num_variables))
+        for subset_size in range(num_variables, -1, -1):
+            possible_subsets = itertools.combinations(all_set_indices, subset_size)
+            for subset in possible_subsets:
+                subset_indices = list(subset)
+                if self.ancestral_closed_Q(variables_set_as_array[subset_indices]):
+                    return subset_indices
+
 
     @cached_property
     def form_finder(self):
@@ -103,7 +125,7 @@ class DAG(Network):
 
     @cached_property
     def knowable_original_probabilities_old(self):
-        return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), np.bool))
+        return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), bool))
 
 if __name__ == '__main__':
     hypergraph_structure = [
@@ -125,6 +147,8 @@ if __name__ == '__main__':
     print(transformed_problem.knowable_original_probabilities_old)
     print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)
         if transformed_problem.ancestral_closed_Q(pair)])
+    print([transformed_problem.ancestral_closed_subset_indices(pair) for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)])
+
 
 
 
