@@ -29,8 +29,12 @@ from internal_functions.groups import dimino_sympy, orbits_of_object_under_group
     minimize_object_under_group_action
 from internal_functions.utilities import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
 import functools
-
-
+from linear_program_options.moseklp import InfeasibilityCertificate
+from linear_program_options.moseklp_dual import InfeasibilityCertificateAUTO
+from linear_program_options.cvxopt import InflationLP
+from internal_functions.inequality_internals import *
+import json
+from collections import defaultdict
 
 class inflated_hypergraph:
 
@@ -209,9 +213,9 @@ class inflation_problem(inflated_hypergraph, DAG):
         # #original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
         # copy_count = np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
 
-        copy_count = np.fromiter(ravelled_knowable_margins.count(var) for var in range(self.observed_count), int)
+        copy_count = np.fromiter((ravelled_knowable_margins.count(var) for var in range(self.observed_count)), int)
         new_inflation_order_candidate=np.multiply(copy_count,hypergraph).max(axis=1)
-        if not np.array_equal(new_inflation_order_candidate, self.inflation_orders)):
+        if not np.array_equal(new_inflation_order_candidate, self.inflation_orders):
             #inflation_orders=new_inflation_order_candidate
             inflated_hypergraph.__init__(self, hypergraph, new_inflation_order_candidate)
             print('Inflation orders too large, switching to optimized inflation orders:',new_inflation_order_candidate)
@@ -462,7 +466,99 @@ class inflation_problem(inflated_hypergraph, DAG):
     def symbolic_b(self):
        return np.hstack([eset.symbolic_b_block for eset in self.expressible_sets])
 
+class inflation_LP(inflation_problem):
+
+    def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
+                 private_setting_cardinalities,rawdata,solver):
+
+        inflation_problem.__init__(self,hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
+                            private_setting_cardinalities)
+        [self.generate_numeric_b_block(eset,rawdata) for eset in self.expressible_sets]
+        self.numeric_b=np.hstack([eset.numeric_b_block for eset in self.expressible_sets])
+        
+        self.InfMat = self.inflation_matrix
+        
+        if not ((solver == 'moseklp') or (solver == 'CVXOPT') or (solver == 'mosekAUTO')):
+            raise TypeError("The accepted solvers are: 'moseklp', 'CVXOPT' and 'mosekAUTO'")
+
+        if solver == 'moseklp':
+
+            self.solve = InfeasibilityCertificate(self.InfMat, self.numeric_b)
+
+        elif solver == 'CVXOPT':
+
+            self.solve = InflationLP(self.InfMat, self.numeric_b)
+
+        elif solver == 'mosekAUTO':
+
+            self.solve = InfeasibilityCertificateAUTO(self.InfMat, self.numeric_b)
+
+        self.tol = self.solve[
+                       'gap'] / 10  # TODO: Choose better tolerance function. This is yielding false incompatibility claims.
+        self.yRaw = np.array(self.solve['x']).ravel()
+
+    def WitnessDataTest(self, y):
+        IncompTest = (np.amin(y) < 0) and (np.dot(y, self.numeric_b) < self.tol)
+        if IncompTest:
+            print('Distribution Compatibility Status: INCOMPATIBLE')
+        else:
+            print('Distribution Compatibility Status: COMPATIBLE')
+        return IncompTest
+
+
+    def Inequality(self,output=[]):
+        # Modified Feb 2, 2021 to pass B_symbolic as an argument for Inequality
+        # Modified Feb 25, 2021 to accept custom output options from user
+        if self.WitnessDataTest(self.yRaw):
+            y = IntelligentRound(self.yRaw, self.InfMat)
+            
+            if output==[]:
+            
+                idxtally=indextally(y)
+                symtally=symboltally(indextally(y),self.symbolic_b)
+                ineq_as_str=inequality_as_string(y,self.symbolic_b)
+
+                print("Writing to file: 'inequality_output.json'")
+
+                returntouser = {
+                    'Raw solver output': self.yRaw.tolist(),
+                    'Inequality as string': ineq_as_str,
+                    'Coefficients grouped by index': idxtally,
+                    'Coefficients grouped by symbol': symtally,
+                    'Clean solver output': y.tolist()
+                }
+                f = open('inequality_output.json', 'w')
+                print(json.dumps(returntouser), file=f)
+                f.close()
+                
+            else:
+                returntouser={}
+                
+                if 'Raw solver output' in output:
+                    returntouser['Raw solver output']=self.yRaw.tolist()
+                if 'Inequality as string' in output:
+                    ineq_as_str=inequality_as_string(y,self.symbolic_b)
+                    returntouser['Inequality as string']=ineq_as_str
+                if 'Coefficients grouped by index' in output:
+                    idxtally=indextally(y)
+                    returntouser['Coefficients grouped by index']=idxtally
+                if 'Coefficients grouped by symbol' in output:
+                    symtally=symboltally(indextally(y),self.symbolic_b)
+                    returntouser['Coefficients grouped by symbol']=symtally
+                if 'Clean solver output' in output:
+                    returntouser['Clean solver output']=y.tolist()
+                
+                f = open('inequality_output.json', 'w')
+                print(json.dumps(returntouser), file=f)
+                f.close()
+                
+            return returntouser
+        else:
+            return print('Compatibility Error: The input distribution is compatible with given inflation order test.')
+
 if __name__ == '__main__':
+    
+    """
     hypergraph = np.array([[1, 1, 0,0], [0, 1, 1,0],[0,0,1,1]])
     #hypergraph=np.array([[1, 1, 0], [0, 1, 1]])
     directed_structure = np.array([[0, 1, 1], [0, 0, 0], [0, 0, 0]])
@@ -484,3 +580,24 @@ if __name__ == '__main__':
     #print(inf.b_vector.shape)
     # print(inf.expressible_sets[3].discarded_rows_to_trash)
     # print(inf.expressible_sets[3].offset_array)
+    """
+    
+    #TRIANGLE SCENARIO
+    
+    hypergraph = np.array([[1,1,0],[0,1,1],[1,0,1]])
+    directed_structure = np.array([[0,0,0],[0,0,0],[0,0,0]])
+    outcome_cardinalities = (4,4,4)
+    private_setting_cardinalities = (1,1,1)
+    inflation_orders = [2,2,2]
+    rawdata = np.array([0.12199995751046305, 0.0022969343799089472, 0.001748319476328954, 3.999015242496535e-05, 0.028907881434196828, 0.0005736087488455967, 0.0003924033706699725, 1.1247230369521505e-05, 0.0030142577390317635, 0.09234476010282468, 4.373922921480586e-05, 0.0014533921021948346, 0.0007798079722868244, 0.024091567451515063, 1.1247230369521505e-05, 0.0003849052170902915, 0.020774884184769502, 0.000396152447459813, 0.0003049249122403608, 4.998769053120669e-06, 0.10820335492385, 0.0020794879260981982, 0.0015546171755205281, 2.4993845265603346e-05, 0.0006260958239033638, 0.020273757587194154, 7.498153579681003e-06, 0.0003374169110856452, 0.0028942872817568676, 0.08976414557915113, 2.624353752888351e-05, 0.0012984302615480939, 0.002370666223442477, 4.7488306004646356e-05, 0.0999928767540993, 0.001957018084296742, 0.0006198473625869629, 8.747845842961171e-06, 0.02636975644747481, 0.0005198719815245496, 1.4996307159362007e-05, 0.000403650601039494, 0.0005498645958432735, 0.017359475229224805, 7.123245900696953e-05, 0.002346922070440154, 0.0033754188031197316, 0.10295964618712641, 0.00038740460161685187, 7.498153579681003e-06, 0.01608353942841575, 0.000306174604503641, 0.0021319750011559654, 4.248953695152569e-05, 0.09107007399427891, 0.001860791780024169, 5.998522863744803e-05, 0.0018395470115484063, 0.002570616985567304, 0.0766411271224461, 1.874538394920251e-05, 0.00048238121362614454, 0.0006410921310627258, 0.020223769896662948])
+    
+    inf = inflation_problem(hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
+                            private_setting_cardinalities)
+    
+    print(inf.symbolic_b)
+    print(inf.inflation_matrix.shape)
+    
+    solver='moseklp'
+    inequality=inflation_LP(hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
+                            private_setting_cardinalities,rawdata,solver).Inequality()
+    

@@ -10,7 +10,11 @@ elif hexversion >= 0x3060000:
     from backports.cached_property import cached_property
 else:
     cached_property = property
+if __name__ == '__main__':
+    import sys
+    import pathlib
 
+    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.adjmat_utils import transitive_closure
 
 # Network is the low level original graph representation. InflationGraph will be built as a subclass of DAG, taking inflation order(s) as a further parameter.
