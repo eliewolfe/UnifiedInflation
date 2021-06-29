@@ -150,6 +150,5 @@ matlab_primal_dual.m
 solv_alex.asv
 
 # linear inflation
-*/*.jtask
-*/mosek_sol.json
-*/inequality_output.json
+*.jtask
+*.json
