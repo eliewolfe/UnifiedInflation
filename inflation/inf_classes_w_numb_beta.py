@@ -20,14 +20,14 @@ else:
     cached_property = property
 
 from wrapper import *
-if __name__ == '__main__':
-    import sys
-    import pathlib
 
-    sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
+import sys
+import pathlib
+
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action, \
     minimize_object_under_group_action
-from internal_functions.utilities import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
+from internal_functions.utilities_ import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
 import functools
 from linear_program_options.moseklp import InfeasibilityCertificate
 from linear_program_options.moseklp_dual import InfeasibilityCertificateAUTO
@@ -427,6 +427,7 @@ class inflation_problem(inflated_hypergraph, DAG):
     def expressible_sets(self):
         esets = tuple(map(self.expressible_set, self.partitioned_unpacked_esets))
         offset = 0
+        er=0
         for eset in esets:
             eset.original_indicies = tuple(
                 [tuple(self.ravelled_conf_var_indicies[np.array(part)]) for part in eset.partitioned_tuple_form])
@@ -445,7 +446,6 @@ class inflation_problem(inflated_hypergraph, DAG):
             offset_array[np.flatnonzero(eset.discarded_rows_to_trash_no_offsets)] = offset
             eset.discarded_rows_to_trash = eset.discarded_rows_to_trash_no_offsets + offset_array
             offset = offset + eset.final_number_of_rows
-
         return esets
 
     @cached_property
