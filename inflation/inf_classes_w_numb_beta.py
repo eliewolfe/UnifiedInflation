@@ -106,21 +106,21 @@ class inflated_hypergraph:
     def inflation_group_elements(self):
         return np.array(dimino_sympy([gen for gen in np.vstack(self.inflation_group_generators)]))
 
-    @cached_property
-    def eset_symmetry_group(self):
-
-        when_sorted = np.argsort(np.hstack(self.packed_partitioned_eset_tuple))
-        it = iter(when_sorted)
-        _canonical_pos2 = [list(itertools.islice(it, size)) for size in self.inflation_minima]
-
-        unfiltered_variants = np.array([np.hstack(np.vstack(perm).T) for perm in
-                                        itertools.permutations(itertools.zip_longest(*_canonical_pos2, fillvalue=-1))])
-        expressible_set_variants_filter = np.add(unfiltered_variants, 1).astype(np.bool)
-        unfiltered_variants = unfiltered_variants.compress(
-            (expressible_set_variants_filter == np.atleast_2d(expressible_set_variants_filter[0])).all(axis=1),
-            axis=0)
-        filtered_variants = np.array([eset.compress(np.add(eset, 1).astype(np.bool)) for eset in unfiltered_variants])
-        return np.take_along_axis(np.argsort(filtered_variants, axis=1), np.atleast_2d(when_sorted), axis=1)
+    # @cached_property
+    # def eset_symmetry_group(self):
+    #
+    #     when_sorted = np.argsort(np.hstack(self.packed_partitioned_eset_tuple))
+    #     it = iter(when_sorted)
+    #     _canonical_pos2 = [list(itertools.islice(it, size)) for size in self.inflation_minima]
+    #
+    #     unfiltered_variants = np.array([np.hstack(np.vstack(perm).T) for perm in
+    #                                     itertools.permutations(itertools.zip_longest(*_canonical_pos2, fillvalue=-1))])
+    #     expressible_set_variants_filter = np.add(unfiltered_variants, 1).astype(np.bool)
+    #     unfiltered_variants = unfiltered_variants.compress(
+    #         (expressible_set_variants_filter == np.atleast_2d(expressible_set_variants_filter[0])).all(axis=1),
+    #         axis=0)
+    #     filtered_variants = np.array([eset.compress(np.add(eset, 1).astype(np.bool)) for eset in unfiltered_variants])
+    #     return np.take_along_axis(np.argsort(filtered_variants, axis=1), np.atleast_2d(when_sorted), axis=1)
 
     @cached_property
     def eset_symmetry_rows_to_keep(self):
@@ -229,8 +229,8 @@ class inflation_problem(inflated_hypergraph, DAG):
                                      observable in range(self.observed_count)]
         self.inflated_packed_cardinalities_array = np.repeat(self.packed_cardinalities, self.inflation_copies)
         self.inflated_packed_cardinalities_tuple = tuple(self.inflated_packed_cardinalities_array)
-        self.inflated_packed_cardinalities_indicies = np.repeat(np.arange(len(outcome_cardinalities)),
-                                                                self.inflation_copies)
+        self.inflated_packed_cardinalities_indices = np.repeat(np.arange(len(outcome_cardinalities)),
+                                                               self.inflation_copies)
         self.column_count = self.inflated_packed_cardinalities_array.prod()
         self.shaped_packed_column_integers = np.arange(self.column_count).reshape(
             self.inflated_packed_cardinalities_tuple)
@@ -239,8 +239,8 @@ class inflation_problem(inflated_hypergraph, DAG):
 
         self.unpacked_conf_integers = np.array([list(
             np.arange(self.setting_cardinalities[packed_obs]) + np.array(self.setting_cardinalities)[
-                self.inflated_packed_cardinalities_indicies[:packed_obs_index]].sum()) for packed_obs_index, packed_obs
-            in enumerate(self.inflated_packed_cardinalities_indicies)],
+                self.inflated_packed_cardinalities_indices[:packed_obs_index]].sum()) for packed_obs_index, packed_obs
+            in enumerate(self.inflated_packed_cardinalities_indices)],
             dtype=object)
         # print(self.unpacked_conf_integers)
         self.conf_setting_integers = np.array(
@@ -248,13 +248,13 @@ class inflation_problem(inflated_hypergraph, DAG):
         # print(self.conf_setting_integers)
         self.conf_setting_indicies = self.conf_setting_integers[
             np.repeat(np.arange(len(self.conf_setting_integers)), self.inflation_copies)]
-        self.ravelled_conf_setting_indicies = [i for j in self.conf_setting_indicies for i in j]
-        #print(self.ravelled_conf_setting_indicies)
+        self.ravelled_conf_setting_indices = [i for j in self.conf_setting_indicies for i in j]
+        #print(self.ravelled_conf_setting_indices)
 
-        self.ravelled_conf_var_indicies = np.repeat(np.arange(self.observed_count),
-                                                    np.array(self.setting_cardinalities) * np.array(
+        self.ravelled_conf_var_indices = np.repeat(np.arange(self.observed_count),
+                                                   np.array(self.setting_cardinalities) * np.array(
                                                         self.inflation_copies))
-        # print(self.ravelled_conf_var_indicies)
+        # print(self.ravelled_conf_var_indices)
 
         self.unpacked_inflated_copies = [self.setting_cardinalities[observable] * self.inflation_copies[observable] for
                                          observable in range(self.observed_count)]
@@ -279,12 +279,13 @@ class inflation_problem(inflated_hypergraph, DAG):
     def column_orbits(self):
         AMatrix = orbits_of_object_under_group_action(self.shaped_packed_column_integers,
                                                       self.inflation_group_elements).T
-        AMatrix = np.compress(AMatrix[0] >= 0, AMatrix, axis=1)
+        #Next line only required if shaped_packed_column_integers has undergone some filtering to mark bad columns, which we do not do YET.
+        #AMatrix = np.compress(AMatrix[0] >= 0, AMatrix, axis=1)
         return AMatrix
 
     def _valid_outcomes(self, eset_part_candidate):
-        observables = np.array(self.ravelled_conf_var_indicies)[np.array(eset_part_candidate)]
-        settings_assignment = np.take(self.ravelled_conf_setting_indicies, np.array(eset_part_candidate))
+        observables = np.array(self.ravelled_conf_var_indices)[np.array(eset_part_candidate)]
+        settings_assignment = np.take(self.ravelled_conf_setting_indices, np.array(eset_part_candidate))
         outcome_assignments = np.ndindex(tuple(np.take(self.outcomes_cardinalities, observables)))
         for outcomes_assigment in outcome_assignments:
             validity = True
@@ -348,7 +349,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         # return encoding_of_columns_to_monomials
 
     def generate_symbolic_b_block(self,eset):
-        eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indicies[eset.flat_form]]
+        eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indices[eset.flat_form]]
         size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
         loc_of_each_part=np.add.accumulate(np.array([0]+size_of_each_part))
         sym_b=[]
@@ -435,8 +436,8 @@ class inflation_problem(inflated_hypergraph, DAG):
         er=0
         for eset in esets:
             eset.original_indicies = tuple(
-                [tuple(self.ravelled_conf_var_indicies[np.array(part)]) for part in eset.partitioned_tuple_form])
-            eset.settings_of = tuple([tuple(np.array(self.ravelled_conf_setting_indicies)[np.array(part)]) for part in
+                [tuple(self.ravelled_conf_var_indices[np.array(part)]) for part in eset.partitioned_tuple_form])
+            eset.settings_of = tuple([tuple(np.array(self.ravelled_conf_setting_indices)[np.array(part)]) for part in
                                       eset.partitioned_tuple_form])
             eset.shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities), eset.flat_form)
             eset.size_of_eset = eset.shape_of_eset.prod()
