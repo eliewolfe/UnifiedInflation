@@ -145,45 +145,63 @@ class inflation_problem(inflated_hypergraph, DAG):
     
     @staticmethod
     def MixedCardinalityBaseConversion(cardinality, string):
-        #card = np.array([cardinality[i] ** (len(cardinality) - (i + 1)) for i in range(len(cardinality))])
-        card = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(cardinality))))[:-1])
-        if isinstance(string,str):
-            str_to_array = np.array([int(i) for i in string])
-        else:
-            str_to_array=np.array(string,dtype=np.int64)
-            #print(card,str_to_array)
-        return np.dot(card, str_to_array)
+        # card = np.array([cardinality[i] ** (len(cardinality) - (i + 1)) for i in range(len(cardinality))])
+        # card = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(cardinality))))[:-1])
+        card = np.flip(np.multiply.accumulate(
+            np.hstack((1, np.flip(cardinality[1:]))).astype(dtype=np.ulonglong)
+        ))
+
+        tomultiply = np.asarray(string)
+        if not tomultiply.dtype.kind in np.typecodes["AllInteger"]:
+            tomultiply = np.fromiter(itertools.chain.from_iterable(tomultiply.ravel()), np.uint).reshape(tomultiply.shape + (-1,))
+        return np.matmul(tomultiply, card)
+
+        #
+        # if isinstance(string, str):
+        #     # str_to_array = np.array([int(i) for i in string])
+        #     return np.matmul(card, np.fromiter(string,'U1').astype(np.uint))
+        # else:
+        #     # str_to_array=np.asarray(string, dtype=np.uint) #We don't play with negative numbers
+        #     # print(card,str_to_array)
+        #     return np.matmul(card, string)
     
     @staticmethod
     def ReverseMixedCardinalityBaseConversion(cardinality, num, output='array'):
-        n=num
-        st=[]
-        for i in range(len(cardinality)):
-            
-            j=len(cardinality)-i-1
-            #print(n,cardinality[j])
-            remainder=int(np.remainder(n,cardinality[j]))
-            quotient=(n-remainder)/cardinality[j]
-            if output=='string':
-                st.append(str(remainder))
-            else:
-                st.append(remainder)
-            n=quotient
-            if n < 1:
-                break
-        st.reverse()
-        r=len(cardinality)-len(st)
-        if r!=0:
-            if output=='string':
-                s1=[str(k) for k in np.zeros((1,r),np.uint)[0]]
-            else:
-                s1=[k for k in np.zeros((1,r),np.uint)[0]]
-            s1.extend(st)
-            st=s1
-        if output=='string':
-            return ''.join(st)
+        resolved_tuple = np.stack(np.unravel_index(num,cardinality),axis=-1)
+        if output == 'string':
+            return np.array(list(
+                map(''.join, resolved_tuple.reshape((-1,len(cardinality))).astype(str))
+            )).reshape(resolved_tuple.shape[:-1]).tolist()
         else:
-            return np.array(st)
+            return np.array(resolved_tuple)
+        # n=num
+        # st=[]
+        # for i in range(len(cardinality)):
+        #
+        #     j=len(cardinality)-i-1
+        #     #print(n,cardinality[j])
+        #     remainder=int(np.remainder(n,cardinality[j]))
+        #     quotient=(n-remainder)/cardinality[j]
+        #     if output=='string':
+        #         st.append(str(remainder))
+        #     else:
+        #         st.append(remainder)
+        #     n=quotient
+        #     if n < 1:
+        #         break
+        # st.reverse()
+        # r=len(cardinality)-len(st)
+        # if r!=0:
+        #     if output=='string':
+        #         s1=[str(k) for k in np.zeros((1,r),np.uint)[0]]
+        #     else:
+        #         s1=[k for k in np.zeros((1,r),np.uint)[0]]
+        #     s1.extend(st)
+        #     st=s1
+        # if output=='string':
+        #     return ''.join(st)
+        # else:
+        #     return np.array(st)
 
 
     def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
@@ -426,7 +444,7 @@ class inflation_problem(inflated_hypergraph, DAG):
                     #print(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes))))
                     #print(np.where(self.knowable_original_probabilities==int(self.MixedCardinalityBaseConversion(eset.cardinalities, np.array(list(part_settings)+list(part_outcomes)))))[0])
                     #print(len(rawdata))
-                    marginal=rawdata[np.where(np.array(self.knowable_original_probabilities).ravel()==int(self.MixedCardinalityBaseConversion(self.all_moments_shape, np.array(list(part_settings)+list(part_outcomes)))))[0]][0]
+                    marginal=rawdata[np.where(np.asarray(self.knowable_original_probabilities).ravel()==int(self.MixedCardinalityBaseConversion(self.all_moments_shape, np.array(list(part_settings)+list(part_outcomes)))))[0]][0]
                     #print(marginal,'------')
                 product=product*marginal
                 #print(product,'-------')
