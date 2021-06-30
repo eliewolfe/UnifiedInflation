@@ -9,6 +9,7 @@ Created on Thu Mar 25 17:42:31 2021
 from __future__ import absolute_import
 import numpy as np
 import itertools
+import more_itertools
 
 from sys import hexversion
 
@@ -455,7 +456,15 @@ class inflation_problem(inflated_hypergraph, DAG):
         for i, eset in enumerate(self.expressible_sets):
             amatrices[i] = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
         single_shape[0] = -1
-        return amatrices.reshape(tuple(single_shape))
+        amatrices = amatrices.reshape(tuple(single_shape))
+        #NEW: Adding filter to remove duplicate columns
+        amatrices.sort(axis=0)
+        print("Filtering duplicate columns...")
+        amatrices = amatrices[:, amatrices.any(axis=0)] #Removes columns hitting only trash rows
+        amatrices = amatrices[:, np.lexsort(amatrices)] #Sorts the columns, so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
+        amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)), int).reshape((-1, len(amatrices))).T
+        amatrices = np.unique(amatrices, axis=1)
+        return amatrices
 
     @cached_property
     def inflation_matrix(self):
