@@ -29,6 +29,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action, \
     minimize_object_under_group_action
 from internal_functions.utilities_ import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
+from internal_functions.unique_product import unique_product
 import functools
 from linear_program_options.moseklp import InfeasibilityCertificate
 from linear_program_options.moseklp_dual import InfeasibilityCertificateAUTO
@@ -123,15 +124,17 @@ class inflated_hypergraph:
 
     @cached_property
     def eset_symmetry_rows_to_keep(self):
-        shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities),
-                                [elem for part in self.packed_partitioned_eset_tuple for elem in part])
-        size_of_eset = shape_of_eset.prod()
-        which_rows_to_keep = np.arange(size_of_eset).reshape(shape_of_eset)
-        minimize_object_under_group_action(
-            which_rows_to_keep,
-            self.eset_symmetry_group, skip=1)
-        which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
-        return which_rows_to_keep
+        return unique_product(self.knowable_margins, tuple([np.take(self.outcomes_cardinalities,variables).prod() for variables in self.knowable_margins]))
+        #
+        # shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities),
+        #                         [elem for part in self.packed_partitioned_eset_tuple for elem in part])
+        # size_of_eset = shape_of_eset.prod()
+        # which_rows_to_keep = np.arange(size_of_eset).reshape(shape_of_eset)
+        # minimize_object_under_group_action(
+        #     which_rows_to_keep,
+        #     self.eset_symmetry_group, skip=1)
+        # which_rows_to_keep = np.unique(which_rows_to_keep.ravel(), return_index=True)[1]
+        # return which_rows_to_keep
 
 
 class inflation_problem(inflated_hypergraph, DAG):
@@ -316,6 +319,7 @@ class inflation_problem(inflated_hypergraph, DAG):
 
     def eset_discarded_rows_to_trash(self, eset):
         eset.which_rows_to_keep = np.intersect1d(eset.unpacking_rows_to_keep, eset.symmetry_rows_to_keep)
+        #eset.which_rows_to_keep = eset.unpacking_rows_to_keep
         size_of_eset_after_symmetry_and_unpacking = len(eset.which_rows_to_keep)
         eset.final_number_of_rows = size_of_eset_after_symmetry_and_unpacking
         # there_are_discarded_rows = (size_of_eset_after_symmetry_and_unpacking < size_of_eset)
@@ -458,12 +462,13 @@ class inflation_problem(inflated_hypergraph, DAG):
         single_shape[0] = -1
         amatrices = amatrices.reshape(tuple(single_shape))
         #NEW: Adding filter to remove duplicate columns
-        amatrices.sort(axis=0)
-        print("Filtering duplicate columns...")
+        print("Before compression, number of columns =  ",amatrices.shape[-1])
         amatrices = amatrices[:, amatrices.any(axis=0)] #Removes columns hitting only trash rows
+        print("After discarding trash columns, number of columns =  ", amatrices.shape[-1])
+        amatrices.sort(axis=0)
         amatrices = amatrices[:, np.lexsort(amatrices)] #Sorts the columns, so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
         amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)), int).reshape((-1, len(amatrices))).T
-        amatrices = np.unique(amatrices, axis=1)
+        print("After discarding duplicates columns, number of columns =  ", amatrices.shape[-1])
         return amatrices
 
     @cached_property

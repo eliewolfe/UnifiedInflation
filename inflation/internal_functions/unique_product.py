@@ -1,17 +1,17 @@
 import numpy as np
 from inflation.internal_functions.groups import minimize_object_under_group_action, dimino_sympy
-from inflation.internal_functions.utilities import PositionIndex
+from inflation.internal_functions.utilities_ import PositionIndex
 from sympy.combinatorics import Permutation
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.group_constructs import DirectProduct
 
 def unique_product(interpretation, product_dims):
     clean_interpretation = PositionIndex(list(map(str,interpretation)))
-    print(clean_interpretation)
+    #print(clean_interpretation)
     object = np.arange(np.prod(product_dims)).reshape(product_dims)
     group = group_from_clean_interpretation(clean_interpretation)
     minimize_object_under_group_action(object, group)
-    print(object)
+    #print(object)
     return np.unique(object)
 
 def group_from_clean_interpretation(clean_interpretation):
