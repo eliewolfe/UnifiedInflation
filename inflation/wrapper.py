@@ -22,7 +22,7 @@ from internal_functions.adjmat_utils import transitive_closure
 
 class Network:
     def __init__(self, hypergraph, outcome_cardinalities, setting_cardinalities):
-        self.hypergraph = hypergraph
+        self.hypergraph = np.asarray(hypergraph, dtype=bool)
         self.outcomes_cardinalities = tuple(outcome_cardinalities)
         self.setting_cardinalities = tuple(setting_cardinalities)
         self.num_observed_vars = len(outcome_cardinalities)

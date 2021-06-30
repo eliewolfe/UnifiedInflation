@@ -41,16 +41,20 @@ from collections import defaultdict
 class inflated_hypergraph:
 
     def __init__(self, hypergraph, inflation_orders):
-        self.latent_count = len(hypergraph)
-        self.observed_count = len(hypergraph[0])
-        self.root_structure = [list(np.nonzero(hypergraph[:, observable])[0]) for observable in
-                               range(self.observed_count)]
+        self.hypergraph = np.asarray(hypergraph, dtype=bool)
+        self.latent_count, self.observed_count = self.hypergraph.shape
+        # self.latent_count = len(hypergraph)
+        # self.observed_count = len(hypergraph[0])
+        # self.root_structure = [list(np.nonzero(hypergraph[:, observable])[0]) for observable in
+        #                        range(self.observed_count)]
+        self.root_structure = list(map(np.flatnonzero, self.hypergraph.T))
         self.inflation_orders = np.asarray(inflation_orders)
-        self._latent_ancestors_of = [self.inflation_orders.take(np.nonzero(hypergraph[:, observable])[0]) for
-                                     observable in range(self.observed_count)]
-        self.inflation_copies = np.fromiter(map(np.prod, self._latent_ancestors_of), np.int)
-        self.inflation_depths = np.fromiter(map(len, self._latent_ancestors_of), np.int)
-        self.inflation_minima = np.fromiter(map(np.amin, self._latent_ancestors_of), np.int)
+        # self._latent_parents_of = [self.inflation_orders.take(np.nonzero(hypergraph[:, observable])[0]) for
+        #                            observable in range(self.observed_count)]
+        self._latent_parents_of = [self.inflation_orders[are_parents] for are_parents in self.hypergraph.T]
+        self.inflation_copies = np.fromiter(map(np.prod, self._latent_parents_of), np.int)
+        self.inflation_depths = np.fromiter(map(len, self._latent_parents_of), np.int)
+        self.inflation_minima = np.fromiter(map(np.amin, self._latent_parents_of), np.int)
         accumulated = np.add.accumulate(self.inflation_copies)
         self.inflated_observed_count = accumulated[-1]
         self.offsets = np.hstack(([0], accumulated[:-1]))
@@ -179,7 +183,8 @@ class inflation_problem(inflated_hypergraph, DAG):
         if output=='string':
             return ''.join(st)
         else:
-            return np.array(st)     
+            return np.array(st)
+
 
     def __init__(self, hypergraph, inflation_orders, directed_structure, outcome_cardinalities,
                  private_setting_cardinalities):
@@ -188,22 +193,22 @@ class inflation_problem(inflated_hypergraph, DAG):
         # self.directed_structure=directed_structure
         DAG.__init__(self, hypergraph, directed_structure, outcome_cardinalities, private_setting_cardinalities)
         
-        self.original_conf_var_indicies = np.repeat(np.arange(self.observed_count),
-                                                    np.array(self.inflation_copies))
+        self.original_conf_var_indices = np.repeat(np.arange(self.observed_count),
+                                                   np.array(self.inflation_copies))
 
-        self.packed_partitioned_eset_deflated = [self.original_conf_var_indicies[part] for part in self.packed_partitioned_eset]
+        self.packed_partitioned_eset_deflated = [self.original_conf_var_indices[part] for part in self.packed_partitioned_eset]
         self.knowable_margins = [self.extract_ancestral_closed_subset(part) for part in self.packed_partitioned_eset_deflated]
         ravelled_knowable_margins = list(itertools.chain.from_iterable(self.knowable_margins))
 
         # Elie deprecated this with the simpler code above.
-        # self.knowable_margins=[part for part in self.packed_partitioned_eset_tuple if self.ancestral_closed_Q(self.original_conf_var_indicies[list(part)])]
+        # self.knowable_margins=[part for part in self.packed_partitioned_eset_tuple if self.ancestral_closed_Q(self.original_conf_var_indices[list(part)])]
         # problematic_partitions=list(set(self.packed_partitioned_eset_tuple)-set(self.knowable_margins))
         # if problematic_partitions:
         #     for problematic_partition in problematic_partitions:
         #         for subset_size in range(len(problematic_partition)-1,0,-1):
         #             possible_subsets=itertools.combinations(problematic_partition,subset_size)
         #             for subset in possible_subsets:
-        #                 is_subset_closed=self.ancestral_closed_Q(self.original_conf_var_indicies[list(subset)])
+        #                 is_subset_closed=self.ancestral_closed_Q(self.original_conf_var_indices[list(subset)])
         #                 if is_subset_closed:
         #                     break
         #             if is_subset_closed:
@@ -212,16 +217,16 @@ class inflation_problem(inflated_hypergraph, DAG):
         #             self.knowable_margins.append(subset)
         #
         # print(self.knowable_margins)
-        # ravelled_knowable_margins=self.original_conf_var_indicies[[i for j in self.knowable_margins for i in j]].tolist()
-        # #packed_exp_set_w_original_indices=self.original_conf_var_indicies[np.array([i for j in self.packed_partitioned_eset for i in j])]
+        # ravelled_knowable_margins=self.original_conf_var_indices[[i for j in self.knowable_margins for i in j]].tolist()
+        # #packed_exp_set_w_original_indices=self.original_conf_var_indices[np.array([i for j in self.packed_partitioned_eset for i in j])]
         # #original_copy_count=np.array([packed_exp_set_w_original_indices.tolist().count(var) for var in range(self.observed_count)])
         # copy_count = np.array([ravelled_knowable_margins.count(var) for var in range(self.observed_count)])
 
         copy_count = np.fromiter((ravelled_knowable_margins.count(var) for var in range(self.observed_count)), int)
-        new_inflation_order_candidate=np.multiply(copy_count,hypergraph).max(axis=1)
+        new_inflation_order_candidate=np.multiply(copy_count, self.hypergraph).max(axis=1)
         if not np.array_equal(new_inflation_order_candidate, self.inflation_orders):
             #inflation_orders=new_inflation_order_candidate
-            inflated_hypergraph.__init__(self, hypergraph, new_inflation_order_candidate)
+            inflated_hypergraph.__init__(self, self.hypergraph, new_inflation_order_candidate)
             print('Inflation orders too large, switching to optimized inflation orders:',new_inflation_order_candidate)
         
         
@@ -243,12 +248,18 @@ class inflation_problem(inflated_hypergraph, DAG):
             in enumerate(self.inflated_packed_cardinalities_indices)],
             dtype=object)
         # print(self.unpacked_conf_integers)
-        self.conf_setting_integers = np.array(
-            [range(self.setting_cardinalities[obs]) for obs in range(self.observed_count)], dtype=object)
-        # print(self.conf_setting_integers)
-        self.conf_setting_indicies = self.conf_setting_integers[
-            np.repeat(np.arange(len(self.conf_setting_integers)), self.inflation_copies)]
-        self.ravelled_conf_setting_indices = [i for j in self.conf_setting_indicies for i in j]
+        # self.conf_setting_integers = np.array(
+        #     [range(self.setting_cardinalities[obs]) for obs in range(self.observed_count)], dtype=object)
+        # # print(self.conf_setting_integers)
+        # self.conf_setting_indices = self.conf_setting_integers[
+        #     np.repeat(np.arange(len(self.conf_setting_integers)), self.inflation_copies)]
+        #
+        #
+        # self.ravelled_conf_setting_indices = [i for j in self.conf_setting_indices for i in j]
+
+        self.ravelled_conf_setting_indices = np.fromiter(itertools.chain.from_iterable(map(range,
+                                                np.repeat(self.setting_cardinalities, self.inflation_copies)
+                                                                                           )),int)
         #print(self.ravelled_conf_setting_indices)
 
         self.ravelled_conf_var_indices = np.repeat(np.arange(self.observed_count),
@@ -349,7 +360,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         # return encoding_of_columns_to_monomials
 
     def generate_symbolic_b_block(self,eset):
-        eset.cardinalities=np.array(self.outcomes_cardinalities)[self.ravelled_conf_var_indices[eset.flat_form]]
+        eset.cardinalities=np.asarray(self.outcomes_cardinalities)[self.ravelled_conf_var_indices[eset.flat_form]]
         size_of_each_part=[len(part) for part in eset.partitioned_tuple_form]
         loc_of_each_part=np.add.accumulate(np.array([0]+size_of_each_part))
         sym_b=[]
