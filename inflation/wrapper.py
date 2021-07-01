@@ -17,6 +17,7 @@ if __name__ == '__main__':
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.adjmat_utils import transitive_closure
 
+
 # Network is the low level original graph representation. InflationGraph will be built as a subclass of DAG, taking inflation order(s) as a further parameter.
 # DAG is the user-friendly constructor. It is also a subclass of Network, as it constructs an
 
@@ -27,6 +28,7 @@ class Network:
         self.setting_cardinalities = tuple(setting_cardinalities)
         self.num_observed_vars = len(outcome_cardinalities)
         self.all_moments_shape = self.setting_cardinalities + self.outcomes_cardinalities
+
 
 class DAG(Network):
     r"""Creates an instance of a cardinality-aware DAG, internally represented as a network with missing data.
@@ -45,30 +47,47 @@ class DAG(Network):
         Must have length equal to total number of observable variables.
         Settingless variables should be treated as having setting cardinality = 1.
     """
+
     def __init__(self, hypergraph_structure, directed_structure, outcome_cardinalities, private_setting_cardinalities):
-        self.directed_structure = directed_structure
+        self.directed_structure = np.asarray(directed_structure, dtype=bool)
         self.private_setting_cardinalities = private_setting_cardinalities
         self.inverse_directed_structure = np.transpose(self.directed_structure)
         self.extra_setting_cardinalities = np.multiply(outcome_cardinalities, self.inverse_directed_structure)
         self.shaped_setting_cardinalities = [np.hstack((sett, cards[cards.nonzero()])) for sett, cards in
-                                        zip(self.private_setting_cardinalities, self.extra_setting_cardinalities)]
-        Network.__init__(self, hypergraph_structure, outcome_cardinalities, map(np.prod, self.shaped_setting_cardinalities))
+                                             zip(self.private_setting_cardinalities, self.extra_setting_cardinalities)]
+        Network.__init__(self, hypergraph_structure, outcome_cardinalities,
+                         map(np.prod, self.shaped_setting_cardinalities))
         self.knowable_moments_shape = self.private_setting_cardinalities + self.outcomes_cardinalities
         self.closure = transitive_closure(self.directed_structure)
+
+    def ancestral_closed_settings_Q(self, variables_subset):
+        """
+        :param variables_subset: list of indices of observable variables
+        :return: True iff the settings of the subset is ancestrally closed.
+        """
+        # parents_of_subset = np.flatnonzero(np.sum(np.asarray(self.directed_structure)[:,variables_subset], axis=1))
+        ancestors_of_subset = np.any(self.closure[:, variables_subset], axis=1)
+        #ancestors_outside_subset = set(np.flatnonzero(ancestors_of_subset)).difference(variables_subset)
+        ancestors_of_subset[variables_subset] = False
+        if np.logical_not(ancestors_of_subset.any()):
+            return True
+        else:
+            cardinalities_outside_of_subset = np.asarray(self.private_setting_cardinalities)[
+                # list(ancestors_outside_subset)
+                ancestors_of_subset #Using logical indexing
+                                                                                            ]
+            return cardinalities_outside_of_subset.max() <= 1
 
     def ancestral_closed_Q(self, variables_subset):
         """
         :param variables_subset: list of indices of observable variables
-        :return: True iff the subset is ancestrally closed.
+        :return: True iff the the subset is ancestrally closed.
         """
-        #parents_of_subset= np.flatnonzero(np.sum(np.asarray(self.directed_structure)[:,variables_subset], axis=1))
-        ancestors_of_subset= np.flatnonzero(np.sum(np.asarray(self.closure)[:,variables_subset], axis=1))
-        ancestors_outside_subset = set(ancestors_of_subset).difference(variables_subset)
-        if len(ancestors_outside_subset)==0:
-            return True
-        else:
-            cardinalities_outside_of_subset = np.asarray(self.private_setting_cardinalities)[list(ancestors_outside_subset)]
-            return cardinalities_outside_of_subset.max()<=1
+        parents_of_subset = np.any(self.directed_structure[:, variables_subset], axis=1)
+        parents_of_subset[variables_subset] = False
+        return np.logical_not(parents_of_subset.any())
+        # return set(np.flatnonzero(parents_of_subset)).issubset(variables_subset)
+
 
     # def ancestral_closed_subset_indices(self, variables_set):
     #     variables_set_as_array = np.asarray(variables_set)
@@ -91,17 +110,17 @@ class DAG(Network):
         print('Error extracting an ancestrally closed subset.')
         return list()
 
-
     @cached_property
     def form_finder(self):
         private_setting_indices = np.arange(self.num_observed_vars)
-        outcome_indices = np.arange(self.num_observed_vars)+self.num_observed_vars
-        extra_setting_indices = [np.compress(parents_of, outcome_indices) for parents_of in self.inverse_directed_structure]
-        effective_setting_indices = [np.hstack(([private_setting_index],extra_setting_index))
-                                    for private_setting_index,extra_setting_index in zip(
-                                    private_setting_indices,extra_setting_indices
-                                    )]
-        return np.hstack((np.hstack(effective_setting_indices),outcome_indices))
+        outcome_indices = np.arange(self.num_observed_vars) + self.num_observed_vars
+        extra_setting_indices = [np.compress(parents_of, outcome_indices) for parents_of in
+                                 self.inverse_directed_structure]
+        effective_setting_indices = [np.hstack(([private_setting_index], extra_setting_index))
+                                     for private_setting_index, extra_setting_index in zip(
+                private_setting_indices, extra_setting_indices
+            )]
+        return np.hstack((np.hstack(effective_setting_indices), outcome_indices))
 
     @cached_property
     def form_finder_shape(self):
@@ -123,13 +142,14 @@ class DAG(Network):
         cardinality_converter = np.flip(np.multiply.accumulate(np.hstack((1, np.flip(self.form_finder_shape))))[:-1])
         return np.dot(mixed_radix_array, cardinality_converter)
 
-
     def _knowable_original_probabilities(self):
         for assignment in np.ndindex(self.all_moments_shape):
             settings_assignment = assignment[:self.num_observed_vars]
             outcomes_assigment = assignment[self.num_observed_vars:]
-            knowable=True
-            for setting_integer, setting_shape, parents_of in zip(settings_assignment, self.shaped_setting_cardinalities, self.inverse_directed_structure):
+            knowable = True
+            for setting_integer, setting_shape, parents_of in zip(settings_assignment,
+                                                                  self.shaped_setting_cardinalities,
+                                                                  self.inverse_directed_structure):
                 settings_of_v = np.unravel_index(setting_integer, setting_shape)
                 outcomes_relevant_to_v = np.compress(parents_of, outcomes_assigment)
                 if not np.array_equal(settings_of_v[1:], outcomes_relevant_to_v):
@@ -140,6 +160,7 @@ class DAG(Network):
     @cached_property
     def knowable_original_probabilities_old(self):
         return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), bool))
+
 
 if __name__ == '__main__':
     hypergraph_structure = [
@@ -154,17 +175,12 @@ if __name__ == '__main__':
     transformed_problem = DAG(hypergraph_structure, directed_structure, outcome_cardinalities,
                               private_setting_cardinalities)
 
-    #print(np.maximum(transformed_problem.extra_setting_cardinalities,1))
-    #print(transformed_problem.form_finder)
-    #print(transformed_problem.form_finder_shape)
+    # print(np.maximum(transformed_problem.extra_setting_cardinalities,1))
+    # print(transformed_problem.form_finder)
+    # print(transformed_problem.form_finder_shape)
     print(transformed_problem.knowable_original_probabilities)
     print(transformed_problem.knowable_original_probabilities_old)
-    print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)
-        if transformed_problem.ancestral_closed_Q(pair)])
-    print([transformed_problem.extract_ancestral_closed_subset(pair) for pair in itertools.combinations(range(transformed_problem.num_observed_vars),2)])
-
-
-
-
-
-
+    print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars), 2)
+           if transformed_problem.ancestral_closed_Q(pair)])
+    print([transformed_problem.extract_ancestral_closed_subset(pair) for pair in
+           itertools.combinations(range(transformed_problem.num_observed_vars), 2)])
