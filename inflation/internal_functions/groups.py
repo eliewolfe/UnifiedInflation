@@ -118,11 +118,12 @@ def minimize_object_under_group_action(object, group, action = lambda M, g: M.tr
     -------
     Null, the object is minimized under the group action IN PLACE.
     """
-    for group_element in group[skip:]:
-        np.minimum(
-            object,
-            action(object,group_element),
-            out = object)
+    if group:
+        for group_element in group[skip:]:
+            np.minimum(
+                object,
+                action(object,group_element),
+                out = object)
 
 
 
@@ -164,12 +165,15 @@ def orbits_of_object_under_group_action(object, group, action = lambda M, g: M.t
     -------
     A list of orbits as a 2d numpy array. Each array is t
     """
-    group_order = len(group)
-    results = np.empty_like(object, shape = (group_order, object.size))
-    for i, group_element in enumerate(group):
-        results[i] = action(object, group_element).flat
-    mask = np.amin(results, axis=0) == results[0]
-    return results.compress(mask, axis = 1).T
+    if group:
+        group_order = len(group)
+        results = np.empty_like(object, shape = (group_order, object.size))
+        for i, group_element in enumerate(group):
+            results[i] = action(object, group_element).flat
+        mask = np.amin(results, axis=0) == results[0]
+        return results.compress(mask, axis = 1).T
+    else:
+        return np.expand_dims(object.ravel(), axis=-1)
 
 
 

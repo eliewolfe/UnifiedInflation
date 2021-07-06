@@ -478,22 +478,23 @@ class inflation_problem(inflated_hypergraph, DAG):
     @cached_property
     def AMatrix(self):
         single_shape = list(self.column_orbits.shape)
+        print(single_shape)
         amatrices = np.empty([len(self.expressible_sets)] + single_shape, np.int)
         for i, eset in enumerate(self.expressible_sets):
             amatrices[i] = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
         single_shape[0] = -1
         amatrices = amatrices.reshape(tuple(single_shape))
-        # # NEW: Adding filter to remove duplicate columns
-        # print("Before compression, number of columns =  ", amatrices.shape[-1])
+        # NEW: Adding filter to remove duplicate columns
+        print("Before compression, number of columns =  ", amatrices.shape[-1])
         # amatrices = amatrices[:, amatrices.any(axis=0)]  # Removes columns hitting only trash rows
         # print("After discarding trash columns, number of columns =  ", amatrices.shape[-1])
-        # amatrices.sort(axis=0)
-        # amatrices = amatrices[:, np.lexsort(
-        #     amatrices)]  # Sorts the columns,
-        # # so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
-        # amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)),
-        #                         int).reshape((-1, len(amatrices))).T
-        # print("After discarding duplicates columns, number of columns =  ", amatrices.shape[-1])
+        amatrices.sort(axis=0)
+        amatrices = amatrices[:, np.lexsort(
+            amatrices)]  # Sorts the columns,
+        # so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
+        amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)),
+                                int).reshape((-1, len(amatrices))).T
+        print("After discarding duplicates columns, number of columns =  ", amatrices.shape[-1])
         return amatrices
 
     @cached_property
