@@ -27,7 +27,7 @@ import pathlib
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.groups import dimino_sympy, orbits_of_object_under_group_action
-from internal_functions.utilities_ import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn
+from internal_functions.utilities_ import MoveToFront, MoveToBack, SparseMatrixFromRowsPerColumn, columns_to_unique_rows
 from internal_functions.unique_product import unique_product
 import functools
 from linear_program_options.moseklp import InfeasibilityCertificate
@@ -333,7 +333,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         eset.discarded_rows_to_trash_no_offsets = discarded_rows_to_the_back
         # return discarded_rows_to_the_back
 
-    def columns_to_unique_rows(self, eset):
+    def eset_columns_to_unique_rows(self, eset):
         """"
         Since an unpacked eset has constant setting assignments, it means that the events in the rows
         corresponding to it are all locally orthogonal. That is, a column can hit AT MOST one row from
@@ -342,13 +342,24 @@ class inflation_problem(inflated_hypergraph, DAG):
         which column of the inflation matrix we are talking about and the value in the list indicates which row IN THIS BLOCK
         get "hit" by said column.
         """
-        data_shape = self.shaped_unpacked_column_integers.shape
-        reshaped_column_integers = self.shaped_unpacked_column_integers.transpose(
-            MoveToBack(len(data_shape), eset.flat_form)).reshape((-1, eset.size_of_eset))
-        encoding_of_columns_to_monomials = np.empty(self.shaped_unpacked_column_integers.size, np.int)
-        encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(eset.size_of_eset)
-        eset.columns_to_rows = encoding_of_columns_to_monomials
-        # return encoding_of_columns_to_monomials
+        eset.columns_to_rows = columns_to_unique_rows(self.inflated_unpacked_cardinalities, eset.flat_form)
+
+    # def columns_to_unique_rows(self, eset):
+    #     """"
+    #     Since an unpacked eset has constant setting assignments, it means that the events in the rows
+    #     corresponding to it are all locally orthogonal. That is, a column can hit AT MOST one row from
+    #     this row block.
+    #     As such. eset_discarded_rows_to_trash.take(eset.columns_to_rows) yields a 1d list where position indicates
+    #     which column of the inflation matrix we are talking about and the value in the list indicates which row IN THIS BLOCK
+    #     get "hit" by said column.
+    #     """
+    #     data_shape = self.shaped_unpacked_column_integers.shape
+    #     reshaped_column_integers = self.shaped_unpacked_column_integers.transpose(
+    #         MoveToBack(len(data_shape), eset.flat_form)).reshape((-1, eset.size_of_eset))
+    #     encoding_of_columns_to_monomials = np.empty(self.shaped_unpacked_column_integers.size, np.int)
+    #     encoding_of_columns_to_monomials[reshaped_column_integers] = np.arange(eset.size_of_eset)
+    #     eset.columns_to_rows = encoding_of_columns_to_monomials
+
 
     def generate_symbolic_b_block(self, eset):
         eset.cardinalities = np.asarray(self.outcomes_cardinalities)[self.ravelled_conf_var_indices[eset.flat_form]]
@@ -454,7 +465,7 @@ class inflation_problem(inflated_hypergraph, DAG):
             eset.symmetry_rows_to_keep = self.eset_symmetry_rows_to_keep
             self.eset_unpacking_rows_to_keep(eset)
             self.eset_discarded_rows_to_trash(eset)
-            self.columns_to_unique_rows(eset)
+            self.eset_columns_to_unique_rows(eset)
             self.generate_symbolic_b_block(eset)
             # print(eset.symbolic_b_block)
             # setting offsets
@@ -472,17 +483,17 @@ class inflation_problem(inflated_hypergraph, DAG):
             amatrices[i] = eset.discarded_rows_to_trash.take(eset.columns_to_rows).take(self.column_orbits)
         single_shape[0] = -1
         amatrices = amatrices.reshape(tuple(single_shape))
-        # NEW: Adding filter to remove duplicate columns
-        print("Before compression, number of columns =  ", amatrices.shape[-1])
-        amatrices = amatrices[:, amatrices.any(axis=0)]  # Removes columns hitting only trash rows
-        print("After discarding trash columns, number of columns =  ", amatrices.shape[-1])
-        amatrices.sort(axis=0)
-        amatrices = amatrices[:, np.lexsort(
-            amatrices)]  # Sorts the columns,
-        # so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
-        amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)),
-                                int).reshape((-1, len(amatrices))).T
-        print("After discarding duplicates columns, number of columns =  ", amatrices.shape[-1])
+        # # NEW: Adding filter to remove duplicate columns
+        # print("Before compression, number of columns =  ", amatrices.shape[-1])
+        # amatrices = amatrices[:, amatrices.any(axis=0)]  # Removes columns hitting only trash rows
+        # print("After discarding trash columns, number of columns =  ", amatrices.shape[-1])
+        # amatrices.sort(axis=0)
+        # amatrices = amatrices[:, np.lexsort(
+        #     amatrices)]  # Sorts the columns,
+        # # so we can use justseen instead of everseen (which is slightly faster than everseen + I think less memory)
+        # amatrices = np.fromiter(itertools.chain.from_iterable(more_itertools.unique_justseen(amatrices.T, key=tuple)),
+        #                         int).reshape((-1, len(amatrices))).T
+        # print("After discarding duplicates columns, number of columns =  ", amatrices.shape[-1])
         return amatrices
 
     @cached_property
