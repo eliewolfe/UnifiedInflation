@@ -118,7 +118,7 @@ def minimize_object_under_group_action(object, group, action = lambda M, g: M.tr
     -------
     Null, the object is minimized under the group action IN PLACE.
     """
-    if group:
+    if len(group):
         for group_element in group[skip:]:
             np.minimum(
                 object,
@@ -165,7 +165,7 @@ def orbits_of_object_under_group_action(object, group, action = lambda M, g: M.t
     -------
     A list of orbits as a 2d numpy array. Each array is t
     """
-    if group:
+    if len(group):
         group_order = len(group)
         results = np.empty_like(object, shape = (group_order, object.size))
         for i, group_element in enumerate(group):
