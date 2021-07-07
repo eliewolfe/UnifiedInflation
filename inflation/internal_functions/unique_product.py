@@ -1,6 +1,6 @@
 import numpy as np
-from inflation.internal_functions.groups import minimize_object_under_group_action, dimino_sympy
-from inflation.internal_functions.utilities_ import PositionIndex
+from internal_functions.groups import minimize_object_under_group_action, dimino_sympy
+from internal_functions.utilities_ import PositionIndex
 from sympy.combinatorics import Permutation
 from sympy.combinatorics.perm_groups import PermutationGroup
 from sympy.combinatorics.group_constructs import DirectProduct
