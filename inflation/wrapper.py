@@ -83,8 +83,9 @@ class DAG(Network):
         :param variables_subset: list of indices of observable variables
         :return: True iff the the subset is ancestrally closed.
         """
-        parents_of_subset = np.any(self.directed_structure[:, variables_subset], axis=1)
-        parents_of_subset[variables_subset] = False
+        variables_subset_as_array = np.asarray(variables_subset, dtype=np.uint)
+        parents_of_subset = np.any(self.directed_structure.take(variables_subset_as_array, axis=1), axis=1)
+        parents_of_subset[np.asarray(variables_subset_as_array)] = False
         return np.logical_not(parents_of_subset.any())
         # return set(np.flatnonzero(parents_of_subset)).issubset(variables_subset)
 
@@ -161,6 +162,15 @@ class DAG(Network):
     def knowable_original_probabilities_old(self):
         return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), bool))
 
+    class _UnpackedMarginal(object):
+        def __init__(self, outer, observables, effective_settings_assignment):
+            self.observables = np.asarray(observables)
+            self.effective_settings_assignment = np.asarray(effective_settings_assignment)
+            self.outcome_assignments = np.ndindex(tuple(np.take(outer.outcomes_cardinalities, observables)))
+
+    def UnpackedMarginal(self):
+        return _UnpackedMarginal(self, observables, effective_settings_assignment)
+
 
 if __name__ == '__main__':
     hypergraph_structure = [
@@ -182,5 +192,6 @@ if __name__ == '__main__':
     print(transformed_problem.knowable_original_probabilities_old)
     print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars), 2)
            if transformed_problem.ancestral_closed_Q(pair)])
+    print(transformed_problem.form_finder)
     print([transformed_problem.extract_ancestral_closed_subset(pair) for pair in
            itertools.combinations(range(transformed_problem.num_observed_vars), 2)])
