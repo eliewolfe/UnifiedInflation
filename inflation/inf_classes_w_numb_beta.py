@@ -245,7 +245,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         #
         #
         # self.ravelled_conf_setting_indices = [i for j in self.conf_setting_indices for i in j]
-
+        print(self.knowable_margins,'------')
         self.ravelled_conf_setting_indices = np.fromiter(itertools.chain.from_iterable(
             map(range, np.repeat(
                 self.setting_cardinalities,
