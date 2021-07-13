@@ -9,6 +9,7 @@ import numpy as np
 # from numba import njit
 from scipy.sparse import coo_matrix
 from functools import lru_cache
+from operator import itemgetter
 
 
 def Deduplicate(
@@ -100,6 +101,14 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
         return sparse_matrix_output.asformat('csr', copy=False)[1:]
     else:
         return sparse_matrix_output.asformat('csr', copy=False)
+
+def partsextractor(thing_to_take_parts_of, indices):
+    if len(indices) == 0:
+        return tuple()
+    elif len(indices) == 1:
+        return (itemgetter(*indices)(thing_to_take_parts_of),)
+    else:
+        return itemgetter(*indices)(thing_to_take_parts_of)
 
 
 

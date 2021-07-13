@@ -16,6 +16,8 @@ if __name__ == '__main__':
 
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.adjmat_utils import transitive_closure
+from internal_functions.utilities_ import partsextractor
+from operator import itemgetter
 
 
 # Network is the low level original graph representation. InflationGraph will be built as a subclass of DAG, taking inflation order(s) as a further parameter.
@@ -167,8 +169,32 @@ class DAG(Network):
             self.observables = np.asarray(observables)
             self.effective_settings_assignment = np.asarray(effective_settings_assignment)
             self.outcome_assignments = np.ndindex(tuple(np.take(outer.outcomes_cardinalities, observables)))
+            self.row_ids = range(np.take(outer.outcomes_cardinalities, observables).prod())
+            self.shaped_setting_cardinalities = partsextractor(outer.self.shaped_setting_cardinalities, observables)
+            self.inverse_directed_structure = outer.inverse_directed_structure[observables][:, observables]
 
-    def UnpackedMarginal(self):
+        @cached_property
+        def shaped_setting_assignments(self):
+            return [np.unravel_index(setting_integer, setting_shape)
+                    for setting_integer, setting_shape
+                    in zip(self.effective_settings_assignment, self.shaped_setting_cardinalities)]
+
+        @cached_property
+        def private_settings_assignments(self):
+            return list(map(itemgetter(0), self.shaped_setting_assignments))
+
+        #TODO: implement free observables vs fixed observables for quick enumeration.
+
+        @property
+        def _unpacked_generator(self):
+            for outcomes_assigment, row_id in zip(self.outcome_assignments, self.row_ids):
+                if all(np.array_equal(settings_of_v[1:], np.compress(parents_of, outcomes_assigment))
+                    for settings_of_v, parents_of
+                    in zip(self.shaped_setting_assignments, self.inverse_directed_structure)):
+                    yield row_id
+
+
+    def UnpackedMarginal(self, observables, effective_settings_assignment):
         return _UnpackedMarginal(self, observables, effective_settings_assignment)
 
 
