@@ -4,6 +4,8 @@ import itertools
 
 from sys import hexversion
 
+from numpy import ndarray
+
 if hexversion >= 0x3080000:
     from functools import cached_property
 elif hexversion >= 0x3060000:
@@ -16,6 +18,8 @@ if __name__ == '__main__':
 
     sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 from internal_functions.adjmat_utils import transitive_closure
+from internal_functions.utilities_ import partsextractor
+from operator import itemgetter
 
 
 # Network is the low level original graph representation. InflationGraph will be built as a subclass of DAG, taking inflation order(s) as a further parameter.
@@ -83,8 +87,9 @@ class DAG(Network):
         :param variables_subset: list of indices of observable variables
         :return: True iff the the subset is ancestrally closed.
         """
-        parents_of_subset = np.any(self.directed_structure[:, variables_subset], axis=1)
-        parents_of_subset[variables_subset] = False
+        variables_subset_as_array = np.asarray(variables_subset, dtype=np.uint)
+        parents_of_subset = np.any(self.directed_structure.take(variables_subset_as_array, axis=1), axis=1)
+        parents_of_subset[np.asarray(variables_subset_as_array)] = False
         return np.logical_not(parents_of_subset.any())
         # return set(np.flatnonzero(parents_of_subset)).issubset(variables_subset)
 
@@ -162,6 +167,63 @@ class DAG(Network):
         return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), bool))
 
 
+    class _UnpackedMarginal(object):
+        def __init__(self, outer, observables, effective_settings_assignment):
+            self.observables = np.asarray(observables)
+            self.effective_settings_assignment = np.asarray(effective_settings_assignment)
+            self.outcome_cardinalities = np.take(outer.outcomes_cardinalities, self.observables)
+            self.outcome_assignments = np.ndindex(tuple(self.outcome_cardinalities))
+            self.row_ids = range(self.outcome_cardinalities.prod())
+            self.shaped_setting_cardinalities = partsextractor(outer.self.shaped_setting_cardinalities, observables)
+            self.inverse_directed_structure = outer.inverse_directed_structure[observables][:, observables]
+
+        @cached_property
+        def shaped_setting_assignments(self):
+            return [np.unravel_index(setting_integer, setting_shape)
+                    for setting_integer, setting_shape
+                    in zip(self.effective_settings_assignment, self.shaped_setting_cardinalities)]
+
+        @cached_property
+        def private_settings_assignments(self):
+            return list(map(itemgetter(0), self.shaped_setting_assignments))
+
+        #TODO: implement free observables vs fixed observables for quick enumeration.
+
+        @cached_property
+        def valid_rows(self):
+            return [row_id for outcomes_assigment, row_id in zip(self.outcome_assignments, self.row_ids)
+                if all(np.array_equal(settings_of_v[1:], np.compress(parents_of, outcomes_assigment))
+                    for settings_of_v, parents_of
+                    in zip(self.shaped_setting_assignments, self.inverse_directed_structure))]
+
+        @cached_property
+        def internally_consistent(self):
+            return len(self.valid_rows) > 0
+
+        @cached_property
+        def free_observables(self):
+            return [v for i,v in enumerate(self.observables.flat) if not self.inverse_directed_structure[i].any()]
+
+        @cached_property
+        def fixed_observables(self):
+            return list(set(self.observables).difference(self.free_observables))
+
+        @property
+        def _fixed_observables_assignments(self):
+            for i in range(len(self.fixed_observables)):
+                sample_child_of_v = np.flatnonzero(self.inverse_directed_structure[:,i])[0]
+                parents_of_sample_child = np.flatnonzero(self.inverse_directed_structure[sample_child_of_v])
+                index_of_parent_v = parents_of_sample_child.tolist().index(i)
+                assignment_to_v = self.shaped_setting_assignments[i][index_of_parent_v+1]
+                yield assignment_to_v
+        @cached_property
+        def fixed_observables_assignments(self):
+            return list(self._fixed_observables_assignments)
+        
+    def UnpackedMarginal(self, observables, effective_settings_assignment):
+        return DAG._UnpackedMarginal(self, observables, effective_settings_assignment)
+
+
 if __name__ == '__main__':
     hypergraph_structure = [
         [1, 1, 0],
@@ -182,5 +244,6 @@ if __name__ == '__main__':
     print(transformed_problem.knowable_original_probabilities_old)
     print([pair for pair in itertools.combinations(range(transformed_problem.num_observed_vars), 2)
            if transformed_problem.ancestral_closed_Q(pair)])
+    print(transformed_problem.form_finder)
     print([transformed_problem.extract_ancestral_closed_subset(pair) for pair in
            itertools.combinations(range(transformed_problem.num_observed_vars), 2)])
