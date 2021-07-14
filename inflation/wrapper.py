@@ -4,6 +4,8 @@ import itertools
 
 from sys import hexversion
 
+from numpy import ndarray
+
 if hexversion >= 0x3080000:
     from functools import cached_property
 elif hexversion >= 0x3060000:
@@ -164,6 +166,7 @@ class DAG(Network):
     def knowable_original_probabilities_old(self):
         return np.flatnonzero(np.fromiter(self._knowable_original_probabilities(), bool))
 
+
     class _UnpackedMarginal(object):
         def __init__(self, outer, observables, effective_settings_assignment):
             self.observables = np.asarray(observables)
@@ -185,17 +188,39 @@ class DAG(Network):
 
         #TODO: implement free observables vs fixed observables for quick enumeration.
 
-        @property
-        def _unpacked_generator(self):
-            for outcomes_assigment, row_id in zip(self.outcome_assignments, self.row_ids):
+        @cached_property
+        def valid_rows(self):
+            return [row_id for outcomes_assigment, row_id in zip(self.outcome_assignments, self.row_ids)
                 if all(np.array_equal(settings_of_v[1:], np.compress(parents_of, outcomes_assigment))
                     for settings_of_v, parents_of
-                    in zip(self.shaped_setting_assignments, self.inverse_directed_structure)):
-                    yield row_id
+                    in zip(self.shaped_setting_assignments, self.inverse_directed_structure))]
 
+        @cached_property
+        def internally_consistent(self):
+            return len(self.valid_rows) > 0
 
+        @cached_property
+        def free_observables(self):
+            return [v for i,v in enumerate(self.observables.flat) if not self.inverse_directed_structure[i].any()]
+
+        @cached_property
+        def fixed_observables(self):
+            return list(set(self.observables).difference(self.free_observables))
+
+        @property
+        def _fixed_observables_assignments(self):
+            for i in range(len(self.fixed_observables)):
+                sample_child_of_v = np.flatnonzero(self.inverse_directed_structure[:,i])[0]
+                parents_of_sample_child = np.flatnonzero(self.inverse_directed_structure[sample_child_of_v])
+                index_of_parent_v = parents_of_sample_child.tolist().index(i)
+                assignment_to_v = self.shaped_setting_assignments[i][index_of_parent_v+1]
+                yield assignment_to_v
+        @cached_property
+        def fixed_observables_assignments(self):
+            return list(self._fixed_observables_assignments)
+        
     def UnpackedMarginal(self, observables, effective_settings_assignment):
-        return _UnpackedMarginal(self, observables, effective_settings_assignment)
+        return DAG._UnpackedMarginal(self, observables, effective_settings_assignment)
 
 
 if __name__ == '__main__':
