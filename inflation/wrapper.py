@@ -87,7 +87,7 @@ class DAG(Network):
         :param variables_subset: list of indices of observable variables
         :return: True iff the the subset is ancestrally closed.
         """
-        variables_subset_as_array = np.asarray(variables_subset, dtype=np.uint)
+        variables_subset_as_array = np.asarray(variables_subset, dtype=int)
         parents_of_subset = np.any(self.directed_structure.take(variables_subset_as_array, axis=1), axis=1)
         parents_of_subset[np.asarray(variables_subset_as_array)] = False
         return np.logical_not(parents_of_subset.any())
