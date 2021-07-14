@@ -76,9 +76,9 @@ def InfeasibilityCertificate(A, b):
 
             task.putobjsense(mosek.objsense.minimize)
             task.putintparam(mosek.iparam.bi_clean_optimizer, mosek.optimizertype.primal_simplex)
-            task.putintparam(mosek.iparam.presolve_use, mosek.presolvemode.off)
-            task.putintparam(mosek.iparam.presolve_lindep_use, mosek.onoffkey.off)
-            task.putintparam(mosek.iparam.presolve_max_num_reductions, 0)
+            task.putintparam(mosek.iparam.presolve_use, mosek.presolvemode.on)
+            task.putintparam(mosek.iparam.presolve_lindep_use, mosek.onoffkey.on)
+            task.putintparam(mosek.iparam.presolve_max_num_reductions, -1)
             #task.putintparam(mosek.iparam.optimizer, mosek.optimizertype.dual_simplex)
             task.putintparam(mosek.iparam.optimizer, mosek.optimizertype.intpnt)
             task.putintparam(mosek.iparam.intpnt_basis, mosek.basindtype.never)
@@ -118,6 +118,10 @@ def InfeasibilityCertificate(A, b):
             snx = numvar * [0.0]
             task.getsolution(soltype, skc, skx, skn, xc, xx, y, slc, suc, slx, sux, snx)
             gap = np.linalg.norm(np.subtract(np.array(suc), np.array(slc)), np.inf)
+            print("Max constraint upper bound overviolation:", np.array(suc).max())
+            print("Max constraint upper bound underviolation:", np.array(suc).min())
+            print("Min constraint upper bound overviolation:", np.array(slc).max())
+            print("Min constraint upper bound underviolation:", np.array(slc).min())
             Sol = {'x': np.array(xx), 'y': np.array(y), 'xc': np.array(xc), 'gap': gap}
 
             # task.dispose()

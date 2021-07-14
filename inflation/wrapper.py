@@ -171,8 +171,9 @@ class DAG(Network):
         def __init__(self, outer, observables, effective_settings_assignment):
             self.observables = np.asarray(observables)
             self.effective_settings_assignment = np.asarray(effective_settings_assignment)
-            self.outcome_assignments = np.ndindex(tuple(np.take(outer.outcomes_cardinalities, observables)))
-            self.row_ids = range(np.take(outer.outcomes_cardinalities, observables).prod())
+            self.outcome_cardinalities = np.take(outer.outcomes_cardinalities, self.observables)
+            self.outcome_assignments = np.ndindex(tuple(self.outcome_cardinalities))
+            self.row_ids = range(self.outcome_cardinalities.prod())
             self.shaped_setting_cardinalities = partsextractor(outer.self.shaped_setting_cardinalities, observables)
             self.inverse_directed_structure = outer.inverse_directed_structure[observables][:, observables]
 
