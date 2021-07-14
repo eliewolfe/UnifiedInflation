@@ -84,12 +84,15 @@ def SparseMatrixFromRowsPerColumn(OnesPositions, sort_columns=True):
     #First dimension indicates which ORBIT we are considering.
     #Second dimension indicates which COLUMN we are listing rows for.
     there_are_discarded_rows=np.any(OnesPositions==0)
+    print('Are there discarded rows:',there_are_discarded_rows)
     if not there_are_discarded_rows:
         OnesPositions=OnesPositions-1
     
     columncount = OnesPositions.shape[-1]
     rowcount = int(np.amax(OnesPositions)) + 1
     if sort_columns:
+        OnesPositions.sort(axis=0)
+        OnesPositions = OnesPositions[:, np.lexsort(OnesPositions)]
         ar_to_broadcast = np.lexsort(OnesPositions)
     else:
         ar_to_broadcast = np.arange(columncount)

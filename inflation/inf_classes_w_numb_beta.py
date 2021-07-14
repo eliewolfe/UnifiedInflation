@@ -533,11 +533,13 @@ class inflation_LP(inflation_problem):
         elif solver == 'mosekAUTO':
 
             self.solve = InfeasibilityCertificateAUTO(self.InfMat, self.numeric_b)
-
-        self.tol = self.solve[
-                       'gap'] / 10
-        # TODO: Choose better tolerance function. This is yielding false incompatibility claims.
+        
         self.yRaw = np.array(self.solve['x']).ravel()
+        checkY = csr_matrix(self.yRaw).dot(self.InfMat)
+        self.tol = checkY.min()*10
+        print('Tolerance:',self.tol)
+        # TODO: Choose better tolerance function. This is yielding false incompatibility claims.
+        
 
     def WitnessDataTest(self, y):
         incomp_test = (np.amin(y) < 0) and (np.dot(y, self.numeric_b) < self.tol)
