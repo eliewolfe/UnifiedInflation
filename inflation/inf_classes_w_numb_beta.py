@@ -385,6 +385,7 @@ class inflation_problem(inflated_hypergraph, DAG):
             sym_b.append(product)
         eset.symbolic_b_block = np.array(sym_b)
 
+
     def generate_numeric_b_block(self, eset, rawdata):
         size_of_each_part = [len(part) for part in eset.partitioned_tuple_form]
         loc_of_each_part = np.add.accumulate(np.array([0] + size_of_each_part))
@@ -458,7 +459,7 @@ class inflation_problem(inflated_hypergraph, DAG):
         offset = 0
         for eset in esets:
             eset.original_indicies = tuple(
-                [tuple(self.ravelled_conf_var_indices[np.array(part)]) for part in eset.partitioned_tuple_form])
+                [tuple(self.ravelled_conf_var_indices[list(part)]) for part in eset.partitioned_tuple_form])
             eset.settings_of = tuple([tuple(np.array(self.ravelled_conf_setting_indices)[np.array(part)]) for part in
                                       eset.partitioned_tuple_form])
             eset.shape_of_eset = np.take(np.array(self.inflated_unpacked_cardinalities), eset.flat_form)
